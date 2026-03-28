@@ -993,6 +993,30 @@
     populateZoneSelect();
     updateLegend();
     updateLanguage(); // arrenca en anglès
+    // --- CONNEXIÓ AMB APPS SCRIPT (BACKEND) ---
+     // Atenció: Canvia aquesta URL per la que t'ha donat el teu Google Apps Script
+     const APPSCRIPT_URL = "LA_TEVA_URL_AQUI_QUE_ACABA_EN_/exec";
+    
+     function carregarLogo() {
+       fetch(APPSCRIPT_URL + "?action=getLogo")
+         .then(response => response.json())
+         .then(data => {
+           if (data.logo) {
+             const logoImg = document.getElementById("logoInstitut");
+             logoImg.src = data.logo;
+             logoImg.style.display = "block";
+             console.log("Logo carregat correctament des de Google Drive!");
+           } else {
+             console.error("Error al carregar el logo: ", data.error);
+           }
+         })
+         .catch(error => {
+           console.error("Error de connexió amb Apps Script:", error);
+         });
+     }
+    
+     // Cridem la funció perquè demani el logo només obrir la pàgina
+     carregarLogo();
   </script>
 </body>
 </html>
