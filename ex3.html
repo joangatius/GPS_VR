@@ -61,12 +61,29 @@
       z-index: 20;
       opacity: 0.95;
     }
-
+    #arButton {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 15px 25px;
+      font-size: 18px;
+      font-weight: bold;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 100;
+      display: none; /* Amagat per defecte fins que detecti les ulleres! */
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    #arButton:hover { background-color: #0056b3; }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
-
+  <button id="arButton">🌍 Entrar a Realitat Mixta (AR)</button>
   <!-- Logo institut placeholder -->
   <img id="logoInstitut" src="" alt="Institut logo" style="display:none;" />
 
@@ -1009,6 +1026,73 @@
     // --- CONNEXIÓ AMB APPS SCRIPT (BACKEND) ---
      // Atenció: Canvia aquesta URL per la que t'ha donat el teu Google Apps Script
      const APPSCRIPT_URL = "https://script.google.com/macros/s/AKfycbzFfZYOpQIbizXiUm0qAm2xR7LZAeT2wrtaE9L95TaTbbe8H7Lalh5nfGMFdNTeSQ1Rmw/exec";
+    
+    // --- LÒGICA WEBXR (REALITAT MIXTA) ---
+    const arButton = document.getElementById('arButton');
+    let xrSession = null;
+
+    // 1. Detectem si el navegador té suport per a Realitat Mixta (AR)
+    if ('xr' in navigator) {
+      navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+        if (supported) {
+          // Si estem a les PICO, ensenyem el botó
+          arButton.style.display = 'block';
+          arButton.addEventListener('click', onARButtonClicked);
+        } else {
+          console.log("Realitat Mixta (AR) no suportada en aquest dispositiu o navegador.");
+        }
+      });
+    }
+
+    // 2. Què passa quan l'alumne clica el botó
+    function onARButtonClicked() {
+      if (!xrSession) {
+        // Demanem permís per encendre l'holograma i les càmeres (local-floor ens dóna el terra de la classe)
+        navigator.xr.requestSession('immersive-ar', {
+          requiredFeatures: ['local-floor']
+        }).then(onSessionStarted).catch(err => {
+          console.error("Error en iniciar AR:", err);
+          alert("No s'ha pogut iniciar la Realitat Mixta.");
+        });
+      } else {
+        // Si ja estàvem en AR, sortim
+        xrSession.end();
+      }
+    }
+
+    // 3. Sessió iniciada amb èxit!
+    function onSessionStarted(session) {
+      xrSession = session;
+      arButton.textContent = "❌ Sortir de Realitat Mixta";
+      
+      session.addEventListener('end', onSessionEnded);
+
+      // Connectem el canvas de Cesium a la capa de les ulleres PICO
+      let canvas = viewer.scene.canvas;
+      let gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      
+      gl.makeXRCompatible().then(() => {
+        session.updateRenderState({
+          baseLayer: new XRWebGLLayer(session, gl)
+        });
+        // Iniciem el bucle de renderitzat de les ulleres
+        session.requestAnimationFrame(onXRFrame);
+      });
+    }
+
+    function onSessionEnded() {
+      xrSession = null;
+      arButton.textContent = "🌍 Entrar a Realitat Mixta (AR)";
+    }
+
+    // 4. Bucle que s'executa 90 vegades per segon a les ulleres
+    function onXRFrame(time, frame) {
+      let session = frame.session;
+      session.requestAnimationFrame(onXRFrame);
+      
+      // De moment, mantenim el planeta viu
+      viewer.scene.render();
+    }
     
      function carregarLogo() {
        fetch(APPSCRIPT_URL + "?action=getLogo")
