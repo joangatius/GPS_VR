@@ -10,8 +10,8 @@
     
     // VARIABLES DEL TEMPS I ÒRBITA
     let tempsActiu = false;
-    let velocitatTemps = 2; 
-    let diaActual = 92; // 21 de Juny (Solstici d'Estiu: Pol Nord decantat cap al Sol)
+    let velocitatTemps = 5; // Comencem a 5x
+    let diaActual = 92; // 21 de Juny (Solstici d'Estiu Nord)
     let horaActual = 12; 
     let solEncès = true;
 
@@ -73,15 +73,15 @@
                 }
               }
               else if (accio === 'vel-menys') {
-                velocitatTemps -= 2;
-                if (velocitatTemps === 0) velocitatTemps = -2; 
-                if (velocitatTemps < -18) velocitatTemps = -18;
+                velocitatTemps -= 5;
+                if (velocitatTemps === 0) velocitatTemps = -5; // Saltem el 0
+                if (velocitatTemps < -30) velocitatTemps = -30; // Límit -30x
                 document.getElementById('text-btn-vel').setAttribute('value', `${velocitatTemps}x`);
               }
               else if (accio === 'vel-mes') {
-                velocitatTemps += 2;
-                if (velocitatTemps === 0) velocitatTemps = 2; 
-                if (velocitatTemps > 18) velocitatTemps = 18;
+                velocitatTemps += 5;
+                if (velocitatTemps === 0) velocitatTemps = 5; // Saltem el 0
+                if (velocitatTemps > 30) velocitatTemps = 30; // Límit 30x
                 document.getElementById('text-btn-vel').setAttribute('value', `${velocitatTemps}x`);
               }
             }
@@ -102,8 +102,6 @@
             // --- LECTURA LÍNIES ---
             else if (tocat.classList.contains('linia-important')) {
               actualitzarPanell("➖ " + tocat.getAttribute('data-nom'), tocat.getAttribute('data-info'), "null");
-              
-              // Fem brillar la línia visual (està guardada dins del hitbox invisible)
               let liniaVisual = tocat.liniaVisualAssociada;
               if (liniaVisual) {
                 let colorOriginal = tocat.colorOriginal;
@@ -153,7 +151,7 @@
         let terraObj = document.getElementById('esfera-terra-real').object3D;
         terraObj.rotation.y = horaActual * (15 * Math.PI / 180);
 
-        // 2. LA MÀGIA: INCLINACIÓ DE L'EIX! (El Sol està quiet a la dreta)
+        // 2. Inclinació de l'Eix (Sol quiet a la dreta)
         let angleAny = (diaActual / 365.25) * 2 * Math.PI;
         let inclinacioZ = 23.5 * Math.sin(angleAny); 
         document.getElementById('eix-terra').object3D.rotation.z = -inclinacioZ * (Math.PI / 180);
@@ -177,28 +175,25 @@
           let r = R * Math.cos(latRad); 
           let y = R * Math.sin(latRad); 
 
-          // LÍNIA VISIBLE (Prima i estètica)
           const liniaVis = document.createElement('a-torus');
           liniaVis.setAttribute('radius', r + 0.001); 
           liniaVis.setAttribute('radius-tubular', 0.0015);
           liniaVis.setAttribute('color', color);
           liniaVis.setAttribute('rotation', rotacio || '90 0 0'); 
           liniaVis.setAttribute('position', `0 ${y} 0`); 
-          liniaVis.setAttribute('material', 'shader: flat'); // Sense ombres
+          liniaVis.setAttribute('material', 'shader: flat'); 
           planeta.appendChild(liniaVis);
 
-          // HITBOX INVISIBLE (Molt més gruixuda perquè el làser l'encerti fàcilment)
           const hitbox = document.createElement('a-torus');
           hitbox.classList.add('linia-important');
           hitbox.setAttribute('radius', r + 0.001); 
-          hitbox.setAttribute('radius-tubular', 0.02); // 10 vegades més gruixuda
-          hitbox.setAttribute('material', 'transparent: true; opacity: 0'); // Invisible!
+          hitbox.setAttribute('radius-tubular', 0.02); 
+          hitbox.setAttribute('material', 'transparent: true; opacity: 0'); 
           hitbox.setAttribute('rotation', rotacio || '90 0 0'); 
           hitbox.setAttribute('position', `0 ${y} 0`); 
           hitbox.setAttribute('data-nom', nom);
           hitbox.setAttribute('data-info', info);
           
-          // Enllacem la invisible amb la visible per fer la pampalluga
           hitbox.liniaVisualAssociada = liniaVis;
           hitbox.colorOriginal = color;
           planeta.appendChild(hitbox);
@@ -209,7 +204,6 @@
         afegirLinia("Tròpic de Capricorn", "Latitud -23.5° S.\nLímit de llum vertical a l'hivern.", -23.5, "orange");
         afegirLinia("Cercle Polar Àrtic", "Latitud 66.5° N.\nZona de sol de mitjanit o nit polar.", 66.5, "cyan");
         afegirLinia("Cercle Polar Antàrtic", "Latitud -66.5° S.\nZona de sol de mitjanit o nit polar.", -66.5, "cyan");
-
         afegirLinia("Meridià de Greenwich", "Longitud 0°.\nReferència global de les hores.", 0, "lime", "0 90 0");
 
         this.afegirMarcador = function(nom, lat, lon, color, infoExtra, imatgeUrl) {
@@ -226,7 +220,7 @@
           punt.setAttribute('radius', 0.008);
           punt.setAttribute('color', color);
           punt.setAttribute('position', `${x} ${y} ${z}`);
-          punt.setAttribute('material', 'shader: flat'); // Xinxetes sempre brillants
+          punt.setAttribute('material', 'shader: flat'); 
           punt.setAttribute('data-nom', nom);
           punt.setAttribute('data-lat', lat);
           punt.setAttribute('data-lon', lon);
@@ -246,7 +240,6 @@
 
   <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
     
-    <!-- Llum ambient fosca pel realisme de la nit -->
     <a-light id="llum-ambient" type="ambient" color="#FFF" intensity="0.15"></a-light>
 
     <a-assets>
@@ -260,68 +253,62 @@
     <!-- GRUP PRINCIPAL -->
     <a-entity id="grup-planeta" position="0 1.2 -1.5">
         
-        <!-- EIX DE LA TERRA (Es va inclinant sol via codi) -->
         <a-entity id="eix-terra">
           <a-entity id="esfera-terra-real">
-            <a-sphere 
-              class="esfera-terra"
-              src="#mapa-terra" 
-              marcadors-terra
-              radius="0.5" 
-              material="shader: standard; roughness: 0.9; metalness: 0.0;">
-            </a-sphere>
+            <a-sphere class="esfera-terra" src="#mapa-terra" marcadors-terra radius="0.5" material="shader: standard; roughness: 0.9; metalness: 0.0;"></a-sphere>
           </a-entity>
         </a-entity>
 
-        <!-- EL SOL (Estàtic a la dreta: Eix X=1.5) -->
         <a-sphere id="el-sol" radius="0.08" color="#FFF200" material="shader: flat" position="1.5 0 0"></a-sphere>
-        
-        <!-- Llum Direccional (Apunta des del Sol cap al centre) -->
-        <!-- Per defecte a A-Frame, apuntarà des de 1.5,0,0 cap al 0,0,0 perfectament -->
         <a-entity id="objectiu-llum" position="0 0 0"></a-entity>
         <a-light id="llum-direccional" type="directional" color="#FFF4D4" intensity="4.5" position="1.5 0 0" target="#objectiu-llum"></a-light>
     </a-entity>
 
     <!-- ============================================== -->
-    <!-- CONSOLA (Redissenyada, plana i "Luminosa")     -->
+    <!-- CONSOLA CORREGIDA I NETEJADA                   -->
     <!-- ============================================== -->
-    <a-entity position="0 0.45 -1.2" rotation="-25 0 0">
+    <a-entity position="0 0.40 -1.2" rotation="-20 0 0">
       
-      <!-- Fons pla autoluminós -->
-      <a-plane material="shader: flat; color: #1a1a1a; transparent: true; opacity: 0.95" width="1.6" height="0.4" border-radius="0.05"></a-plane>
+      <!-- Fons pla autoluminós. L'hem fet de 2 metres d'ample -->
+      <a-plane material="shader: flat; color: #1a1a1a; transparent: true; opacity: 0.95" width="2.0" height="0.5" border-radius="0.05"></a-plane>
       
-      <!-- DATA I HORA (Ben proporcionades) -->
-      <a-text id="text-dia" value="21 Jun 2026" position="-0.75 0.10 0.01" color="#00FFFF" width="3.5" font="mozillavr"></a-text>
-      <a-text id="text-hora" value="12:00" position="0.35 0.10 0.01" color="#FFD700" scale="1.4 1.4 1.4" font="mozillavr"></a-text>
+      <!-- DATA I HORA. Hem fixat un ample màxim (width="4") perquè NO desbordin -->
+      <a-text id="text-dia" value="21 Jun 2026" position="-0.90 0.12 0.01" color="#00FFFF" width="4" align="left" font="mozillavr"></a-text>
+      <a-text id="text-hora" value="12:00" position="0.90 0.12 0.01" color="#FFD700" width="5.5" align="right" font="mozillavr"></a-text>
 
-      <!-- BOTONS (Amb shader: flat per brillar) -->
-      <a-plane class="boto-vr" data-accio="sol" material="shader: flat; color: #FFD700" position="-0.55 -0.10 0.01" width="0.25" height="0.12" border-radius="0.02">
-        <a-text id="text-btn-sol" value="SOL ON" align="center" position="0 0 0.01" color="black" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
+      <!-- BOTONS (Posicionats meticulosament) -->
+      <!-- [ SOL ] -->
+      <a-plane class="boto-vr" data-accio="sol" material="shader: flat; color: #FFD700" position="-0.7 -0.12 0.01" width="0.3" height="0.15" border-radius="0.02">
+        <a-text id="text-btn-sol" value="SOL ON" align="center" position="0 0 0.01" color="black" wrap-count="8" width="0.25" font="mozillavr"></a-text>
       </a-plane>
 
-      <a-plane class="boto-vr" data-accio="play" material="shader: flat; color: #1E90FF" position="-0.20 -0.10 0.01" width="0.3" height="0.12" border-radius="0.02">
-        <a-text id="text-btn-play" value="PLAY >" align="center" position="0 0 0.01" color="white" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
+      <!-- [ PLAY ] -->
+      <a-plane class="boto-vr" data-accio="play" material="shader: flat; color: #1E90FF" position="-0.3 -0.12 0.01" width="0.3" height="0.15" border-radius="0.02">
+        <a-text id="text-btn-play" value="PLAY >" align="center" position="0 0 0.01" color="white" wrap-count="8" width="0.25" font="mozillavr"></a-text>
       </a-plane>
 
-      <a-plane class="boto-vr" data-accio="vel-menys" material="shader: flat; color: #FF4500" position="0.15 -0.10 0.01" width="0.12" height="0.12" border-radius="0.02">
-        <a-text value="-" align="center" position="0 0.01 0.01" color="white" scale="1.5 1.5 1.5"></a-text>
+      <!-- [ - ] -->
+      <a-plane class="boto-vr" data-accio="vel-menys" material="shader: flat; color: #FF4500" position="0.15 -0.12 0.01" width="0.15" height="0.15" border-radius="0.02">
+        <a-text value="-" align="center" position="0 0.01 0.01" color="white" wrap-count="3" width="0.1" font="mozillavr"></a-text>
       </a-plane>
 
-      <a-text id="text-btn-vel" value="2x" align="center" position="0.35 -0.10 0.01" color="white" scale="0.9 0.9 0.9" font="mozillavr"></a-text>
+      <!-- TEXT VELOCITAT -->
+      <a-text id="text-btn-vel" value="5x" align="center" position="0.4 -0.12 0.01" color="white" width="3" font="mozillavr"></a-text>
 
-      <a-plane class="boto-vr" data-accio="vel-mes" material="shader: flat; color: #FF4500" position="0.55 -0.10 0.01" width="0.12" height="0.12" border-radius="0.02">
-        <a-text value="+" align="center" position="0 0.01 0.01" color="white" scale="1.5 1.5 1.5"></a-text>
+      <!-- [ + ] -->
+      <a-plane class="boto-vr" data-accio="vel-mes" material="shader: flat; color: #FF4500" position="0.65 -0.12 0.01" width="0.15" height="0.15" border-radius="0.02">
+        <a-text value="+" align="center" position="0 0.01 0.01" color="white" wrap-count="3" width="0.1" font="mozillavr"></a-text>
       </a-plane>
 
     </a-entity>
 
     <!-- ============================================== -->
-    <!-- PANELLS LATERALS (Endarrerits i Il·luminats)    -->
+    <!-- PANELLS LATERALS                               -->
     <!-- ============================================== -->
     <a-entity id="panell-info" position="1.3 1.5 -2.5" rotation="0 -30 0">
       <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.8" width="0.9" height="0.9" border-radius="0.05"></a-plane>
       <a-text id="text-panell" value="Simulador Orbital" position="-0.40 0.35 0.01" color="#F0E68C" width="1.6" font="mozillavr"></a-text>
-      <a-text id="text-coords" value="La Terra inclina el seu\neix respecte al Sol\ncreant les estacions." position="-0.40 0.15 0.01" color="white" width="1.3"></a-text>
+      <a-text id="text-coords" value="Utilitza els botons inferiors\nper jugar amb el temps\ni la llum del Sol." position="-0.40 0.15 0.01" color="white" width="1.3"></a-text>
       <a-image id="imatge-panell" src="" position="0 -0.20 0.02" width="0.8" height="0.45" visible="false"></a-image>
     </a-entity>
 
