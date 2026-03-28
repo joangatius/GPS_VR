@@ -1,1 +1,49 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <title>Repte 3 VR - Realitat Mixta</title>
+  <!-- Carreguem A-Frame (El motor de Realitat Virtual/Mixta) -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+</head>
+<body>
 
+  <!-- L'escena 3D. Demanem permís per tenir el terra real de l'aula -->
+  <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
+    
+    <!-- Magatzem de recursos (AQUÍ CARREGUEM LA TEXTURA DEL MAPA) -->
+    <a-assets>
+      <img id="mapa-terra" src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Solarsystemscope_texture_8k_earth_daymap.jpg/1024px-Solarsystemscope_texture_8k_earth_daymap.jpg" crossorigin="anonymous">
+    </a-assets>
+
+    <!-- ELS TEUS COMANDAMENTS DE LES PICO -->
+    <!-- Apareixeran amb un raig làser per interactuar amb els objectes -->
+    <a-entity laser-controls="hand: left" raycaster="objects: .interactiu"></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="objects: .interactiu"></a-entity>
+
+    <!-- EL PLANETA TERRA -->
+    <!-- 
+      radius="0.5": fa 1 metre de diàmetre total
+      position="0 1.2 -1.5": Està centrat, a 1.2m d'alçada (per sobre d'una taula), i a 1.5 metres davant teu.
+    -->
+    <a-sphere 
+      class="interactiu"
+      src="#mapa-terra" 
+      radius="0.5" 
+      position="0 1.2 -1.5" 
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear">
+    </a-sphere>
+
+    <!-- TEXT SURANT A L'AIRE -->
+    <a-text 
+      value="Planeta Terra - GPS VR" 
+      position="0 1.9 -1.5" 
+      align="center" 
+      color="#000000"
+      scale="0.5 0.5 0.5">
+    </a-text>
+
+  </a-scene>
+
+</body>
+</html>
