@@ -2,57 +2,70 @@
 <html lang="ca">
 <head>
   <meta charset="utf-8">
-  <title>Repte 3 VR - Simulador Astronòmic Precis</title>
+  <title>Repte 3 VR - Simulador i Dades Alumne</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
     let ciutatsVisitades =[];
     
-    // --- LECTURA DE LA DATA I HORA REALS ---
-    let dataSistema = new Date();
-    let dataEquinocci = new Date(dataSistema.getFullYear(), 2, 21); // 21 de Març
-    
     // VARIABLES DEL TEMPS
+    let dataSistema = new Date();
+    let dataEquinocci = new Date(dataSistema.getFullYear(), 2, 21); 
     let tempsActiu = false;
     let velocitatsPermeses =[-50, -30, -10, -5, -2, -1, 1, 2, 5, 10, 30, 50];
-    let indexVelocitat = 6; // Comença a 1x (temps real)
+    let indexVelocitat = 6; 
     let velocitatTemps = velocitatsPermeses[indexVelocitat]; 
-    
-    // Calculem dies exactes respecte l'equinocci
     let diaActual = (dataSistema - dataEquinocci) / (1000 * 60 * 60 * 24); 
     let horaActual = dataSistema.getHours() + (dataSistema.getMinutes() / 60); 
-    
     let solEncès = true;
     let ultimEventDisparat = null; 
     let audioCtx = null;
 
-    // --- GENERADOR DE SO (BEEP) ---
+    // --- CONNEXIÓ AMB GOOGLE APPS SCRIPT ---
+    // IMPORTANT: Posa aquí la teva URL de Google Apps Script!
+    const APPSCRIPT_URL = "LA_TEVA_URL_AQUI_QUE_ACABA_EN_/exec";
+
+    document.addEventListener("DOMContentLoaded", () => {
+      fetch(APPSCRIPT_URL + "?action=getLogo")
+        .then(response => response.json())
+        .then(data => {
+          if (data.logo) {
+            document.getElementById('logo-institut').setAttribute('src', data.logo);
+            document.getElementById('logo-institut').setAttribute('visible', 'true');
+          }
+          let email = data.email || "anonym";
+          document.getElementById('text-usuari').setAttribute('value', `Alumne: ${email}`);
+        })
+        .catch(error => {
+          console.error("Error Apps Script:", error);
+          document.getElementById('text-usuari').setAttribute('value', `Alumne: anonym`);
+        });
+    });
+
     function ferBip() {
       if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
       if (audioCtx.state === 'suspended') audioCtx.resume();
       let osc = audioCtx.createOscillator();
       let gain = audioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Nota La
-      gain.gain.setValueAtTime(0.05, audioCtx.currentTime); // Volum baixet
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); 
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime); 
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.start();
       osc.stop(audioCtx.currentTime + 0.1);
     }
 
-    // --- MOTOR DE VEU (TEXT-TO-SPEECH) ---
+    // MOTOR DE VEU (Millorat per forçar qualsevol veu disponible)
+    window.speechSynthesis.onvoiceschanged = function() { window.speechSynthesis.getVoices(); };
     function parlar(text) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel(); 
         let missatge = new SpeechSynthesisUtterance(text);
-        
-        // Intentem buscar la veu en Català o Espanyol a les ulleres
         let voices = window.speechSynthesis.getVoices();
-        let voice = voices.find(v => v.lang.startsWith('ca')) || voices.find(v => v.lang.startsWith('es'));
+        // Intentem Català -> Castellà -> La primera que tingui la ullera
+        let voice = voices.find(v => v.lang.startsWith('ca')) || voices.find(v => v.lang.startsWith('es')) || voices[0];
         if (voice) missatge.voice = voice;
-        
-        missatge.lang = voice ? voice.lang : 'ca-ES';
         missatge.rate = 1.0;     
         window.speechSynthesis.speak(missatge);
       }
@@ -68,7 +81,7 @@
       return { textComplet: `${dia} ${mes} ${any}`, textCurt: `${dia} ${mes}` };
     }
 
-    // 1. MOTOR GENERAL D'INTERACCIÓ
+    // 1. MOTOR D'INTERACCIÓ
     AFRAME.registerComponent('control-pico', {
       init: function () {
         this.comandament = this.el;
@@ -76,7 +89,6 @@
         this.solVisual = document.getElementById('el-sol');
         this.llumSol = document.getElementById('llum-direccional');
         this.llumAmbient = document.getElementById('llum-ambient');
-        
         this.planetaAgafat = false;
 
         window.actualitzarPanellCentral = function(titol, descripcio, imgUrl) {
@@ -97,16 +109,13 @@
 
         this.comandament.addEventListener('triggerdown', (e) => {
           let tocats = this.comandament.components.raycaster.intersectedEls;
-          
           if (tocats.length > 0) {
             let tocat = tocats[0];
 
-            // --- CONSOLA ---
             if (tocat.classList.contains('boto-vr')) {
               ferBip();
               batecAnimacio(tocat); 
               let accio = tocat.getAttribute('data-accio');
-              
               if (accio === 'sol') {
                 solEncès = !solEncès;
                 if (solEncès) {
@@ -153,16 +162,13 @@
             else if (tocat.classList.contains('pin-ciutat')) {
               ferBip();
               let nomCiutat = tocat.getAttribute('data-nom');
-              let latCoords = Math.abs(tocat.getAttribute('data-lat')).toFixed(1) + (tocat.getAttribute('data-lat') >= 0 ? ' N' : ' S');
-              let lonCoords = Math.abs(tocat.getAttribute('data-lon')).toFixed(1) + (tocat.getAttribute('data-lon') >= 0 ? ' E' : ' O');
+              let lat = Math.round(tocat.getAttribute('data-lat'));
+              parlar(nomCiutat + ". Latitud " + lat); 
               
-              parlar(nomCiutat + ". Latitud " + Math.round(tocat.getAttribute('data-lat')) + " graus."); 
+              let latC = Math.abs(tocat.getAttribute('data-lat')).toFixed(1) + (tocat.getAttribute('data-lat') >= 0 ? ' N' : ' S');
+              let lonC = Math.abs(tocat.getAttribute('data-lon')).toFixed(1) + (tocat.getAttribute('data-lon') >= 0 ? ' E' : ' O');
               
-              window.actualitzarPanellCentral(
-                "📍 " + nomCiutat, 
-                `Coordenades:\n[ Lat: ${latCoords}  |  Lon: ${lonCoords} ]\n\n${tocat.getAttribute('data-extra')}`, 
-                tocat.getAttribute('data-img')
-              );
+              window.actualitzarPanellCentral("📍 " + nomCiutat, `Coordenades:\n[ Lat: ${latC}  |  Lon: ${lonC} ]\n\n${tocat.getAttribute('data-extra')}`, tocat.getAttribute('data-img'));
               batecAnimacio(tocat);
               window.afegirAHistorialCentral(nomCiutat);
             }
@@ -171,7 +177,6 @@
               ferBip();
               let nomLinia = tocat.getAttribute('data-nom');
               parlar(nomLinia); 
-
               window.actualitzarPanellCentral("➖ " + nomLinia, tocat.getAttribute('data-info'), "null");
               let liniaVisual = tocat.liniaVisualAssociada;
               if (liniaVisual) {
@@ -203,8 +208,6 @@
           while (horaActual < 0) { horaActual += 24; diaActual--; }
         }
 
-        // --- CÀLCUL ASTRONÒMIC CORREGIT (Hora de Greenwich real) ---
-        // A les 12:00, Greenwich (0º) ha d'estar de cara al Sol (+X). 
         let terraObj = document.getElementById('esfera-terra-real').object3D;
         terraObj.rotation.y = (horaActual - 12) * (15 * Math.PI / 180);
 
@@ -212,14 +215,13 @@
         let inclinacioZ = 23.5 * Math.sin(angleAny); 
         document.getElementById('eix-terra').object3D.rotation.z = -inclinacioZ * (Math.PI / 180);
 
-        // --- SISTEMA D'ESDEVENIMENTS ASTRONÒMICS ---
         let diaNormalitzat = ((Math.floor(diaActual) % 365) + 365) % 365;
         let eventActiu = null;
 
-        if (diaNormalitzat >= 363 || diaNormalitzat <= 1) eventActiu = { id: 1, nom: "Equinocci de Primavera", desc: "El Sol cau vertical sobre l'Equador.\nEl dia i la nit duren 12 hores iguals a tot el planeta." };
-        else if (diaNormalitzat >= 90 && diaNormalitzat <= 93) eventActiu = { id: 2, nom: "Solstici d'Estiu", desc: "La màxima inclinació del Pol Nord cap al Sol.\nL'Àrtic té Sol les 24 hores (Sol de mitjanit)." };
-        else if (diaNormalitzat >= 183 && diaNormalitzat <= 186) eventActiu = { id: 3, nom: "Equinocci de Tardor", desc: "El Sol torna a passar verticalment per l'Equador.\nInici de la tardor a l'hemisferi nord." };
-        else if (diaNormalitzat >= 273 && diaNormalitzat <= 276) eventActiu = { id: 4, nom: "Solstici d'Hivern", desc: "El Pol Nord s'amaga completament del Sol.\nDia més curt de l'any a Lleida. Nit àrtica." };
+        if (diaNormalitzat >= 363 || diaNormalitzat <= 1) eventActiu = { id: 1, nom: "Equinocci de Primavera", desc: "El Sol cau vertical sobre l'Equador.\nEl dia i la nit duren 12 hores iguals." };
+        else if (diaNormalitzat >= 90 && diaNormalitzat <= 93) eventActiu = { id: 2, nom: "Solstici d'Estiu", desc: "La màxima inclinació cap al Sol.\nL'Àrtic té Sol les 24 hores." };
+        else if (diaNormalitzat >= 183 && diaNormalitzat <= 186) eventActiu = { id: 3, nom: "Equinocci de Tardor", desc: "El Sol torna a l'Equador.\nInici de la tardor a l'hemisferi nord." };
+        else if (diaNormalitzat >= 273 && diaNormalitzat <= 276) eventActiu = { id: 4, nom: "Solstici d'Hivern", desc: "El Pol Nord s'amaga del Sol.\nDia més curt de l'any a Lleida." };
 
         let dataActualObjecte = obtenirDataText(diaActual);
 
@@ -228,9 +230,7 @@
           parlar(eventActiu.nom); 
           window.actualitzarPanellCentral("🌟 " + eventActiu.nom, `Data: ${dataActualObjecte.textComplet}\n\n${eventActiu.desc}`, "null");
           window.afegirAHistorialCentral(`${dataActualObjecte.textCurt} - ${eventActiu.nom}`);
-        } else if (!eventActiu) {
-          ultimEventDisparat = null;
-        }
+        } else if (!eventActiu) { ultimEventDisparat = null; }
 
         document.getElementById('text-dia').setAttribute('value', dataActualObjecte.textComplet);
         let hFormat = Math.floor(Math.abs(horaActual)).toString().padStart(2, '0');
@@ -239,7 +239,6 @@
       }
     });
 
-    // 2. CONSTRUCTOR MATEMÀTIC
     AFRAME.registerComponent('marcadors-terra', {
       init: function () {
         const planeta = this.el;
@@ -249,7 +248,6 @@
           let latRad = lat * Math.PI / 180;
           let r = R * Math.cos(latRad); 
           let y = R * Math.sin(latRad); 
-
           const liniaVis = document.createElement('a-torus');
           liniaVis.setAttribute('radius', r + 0.001); 
           liniaVis.setAttribute('radius-tubular', 0.0015);
@@ -259,17 +257,15 @@
           liniaVis.setAttribute('material', 'shader: flat'); 
           planeta.appendChild(liniaVis);
 
-          // HITBOX INVISIBLE AMB "depthWrite: false" PER NO FORADAR ELS PANELLS!
           const hitbox = document.createElement('a-torus');
           hitbox.classList.add('linia-important');
           hitbox.setAttribute('radius', r + 0.001); 
-          hitbox.setAttribute('radius-tubular', 0.025); // Molt gruixuda perquè s'encerti fàcil
+          hitbox.setAttribute('radius-tubular', 0.025); 
           hitbox.setAttribute('material', 'transparent: true; opacity: 0.0; depthWrite: false'); 
           hitbox.setAttribute('rotation', rotacio || '90 0 0'); 
           hitbox.setAttribute('position', `0 ${y} 0`); 
           hitbox.setAttribute('data-nom', nom);
           hitbox.setAttribute('data-info', info);
-          
           hitbox.liniaVisualAssociada = liniaVis;
           hitbox.colorOriginal = color;
           planeta.appendChild(hitbox);
@@ -305,7 +301,7 @@
           planeta.appendChild(punt);
         }
 
-        this.afegirMarcador("Lleida", 41.61, 0.61, "red", "Fixa't a quina distància estem de l'Equador.", "lleida.jpg");
+        this.afegirMarcador("Lleida", 41.61, 0.61, "red", "Fixa't on som respecte a l'Equador.", "lleida.jpg");
         this.afegirMarcador("Nova York", 40.71, -74.00, "cyan", "Estats Units.", "null");
         this.afegirMarcador("Sydney", -33.86, 151.20, "magenta", "Austràlia.", "null");
       }
@@ -317,11 +313,7 @@
   <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
     
     <a-light id="llum-ambient" type="ambient" color="#FFF" intensity="0.15"></a-light>
-
-    <a-assets>
-      <img id="mapa-terra" src="earth.jpg">
-      <img id="img-lleida" src="lleida.jpg">
-    </a-assets>
+    <a-assets><img id="mapa-terra" src="earth.jpg"><img id="img-lleida" src="lleida.jpg"></a-assets>
 
     <a-entity laser-controls="hand: left" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .boto-vr; far: 5" control-pico></a-entity>
     <a-entity laser-controls="hand: right" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .boto-vr; far: 5" control-pico></a-entity>
@@ -341,11 +333,9 @@
     <!-- CONSOLA CENTRAL -->
     <a-entity position="0 0.40 -1.2" rotation="-20 0 0">
       <a-plane material="shader: flat; color: #1a1a1a; transparent: true; opacity: 0.95" width="2.6" height="0.6" border-radius="0.05"></a-plane>
-      
       <a-text id="text-dia" value="21 Jun 2026" position="-0.7 0.15 0.01" color="#00FFFF" align="center" width="1.6" wrap-count="15" font="mozillavr"></a-text>
       <a-text id="text-hora" value="12:00" position="0.7 0.15 0.01" color="#FFD700" align="center" width="1.2" wrap-count="10" font="mozillavr"></a-text>
 
-      <!-- BOTONS INFERIORS -->
       <a-plane class="boto-vr" data-accio="sol" material="shader: flat; color: #FFD700" position="-0.8 -0.15 0.01" width="0.4" height="0.18" border-radius="0.02">
         <a-text id="text-btn-sol" value="SOL ON" align="center" position="0 0 0.01" color="black" width="0.3" wrap-count="8" font="mozillavr"></a-text>
       </a-plane>
@@ -363,14 +353,19 @@
       <a-plane class="boto-vr" data-accio="vel-mes" material="shader: flat; color: #FF4500" position="0.85 -0.15 0.01" width="0.2" height="0.18" border-radius="0.02">
         <a-text value="+" align="center" position="0 0.01 0.01" color="white" width="0.15" wrap-count="3" font="mozillavr"></a-text>
       </a-plane>
+    </a-entity>
 
+    <!-- LOGO I CORREU (Sota la consola) -->
+    <a-entity position="0 0.0 -1.2" rotation="-20 0 0">
+      <a-image id="logo-institut" src="" position="-0.4 0 0.01" width="0.25" height="0.25" visible="false"></a-image>
+      <a-text id="text-usuari" value="Connectant amb Google..." position="-0.2 0 0.01" baseline="center" color="#00FF7F" width="1.5" wrap-count="30" font="mozillavr"></a-text>
     </a-entity>
 
     <!-- PANELLS LATERALS -->
     <a-entity id="panell-info" position="1.8 1.6 -3.0" rotation="0 -35 0">
       <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.9" width="1.6" height="1.4" border-radius="0.05"></a-plane>
       <a-text id="text-panell" value="Simulador Orbital" position="-0.7 0.60 0.01" baseline="top" color="#F0E68C" width="1.4" wrap-count="22" font="mozillavr"></a-text>
-      <a-text id="text-coords" value="La Terra s'ha sincronitzat amb el dia i l'hora reals.\n\nBusca Lleida o les línies de colors amb el teu làser." position="-0.7 0.40 0.01" baseline="top" color="white" width="1.4" wrap-count="35" font="mozillavr"></a-text>
+      <a-text id="text-coords" value="La Terra s'ha sincronitzat amb el dia i l'hora reals.\n\nActiva el temps per veure el pas de les estacions." position="-0.7 0.40 0.01" baseline="top" color="white" width="1.4" wrap-count="35" font="mozillavr"></a-text>
       <a-image id="imatge-panell" src="" position="0 -0.2 0.02" width="1.2" height="0.6" visible="false"></a-image>
     </a-entity>
 
