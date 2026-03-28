@@ -1,1 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Repte 3 - Parallels and Meridians</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- CesiumJS -->
+  <link href="https://unpkg.com/cesium/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script src="https://unpkg.com/cesium/Build/Cesium/Cesium.js"></script>
+  <style>
+    html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; }
+    #cesiumContainer { position: relative; }
+    #panel {
+      position: absolute; top: 10px; left: 10px; z-index: 10;
+      background: rgba(255,255,255,.95); border-radius: 8px; padding: 10px 12px;
+      font: 14px/1.4 system-ui, sans-serif; box-shadow: 0 2px 10px rgba(0,0,0,.15);
+      min-width: 360px; max-height: 90vh; overflow-y: auto;
+    }
+    #panel h3 { margin: 0 0 6px; font-size: 16px; border-bottom: 1px solid #ccc; padding-bottom: 5px;}
+    .slider-group { margin: 10px 0; }
+    label { display:inline-block; width:80px; font-weight: bold; }
+    input[type=range] { width: 180px; height: 25px; vertical-align: middle; }
+    input[type=number] { width: 70px; margin-left: 6px; }
+    button { cursor: pointer; }
+    
+    #savedList { margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px; }
+    .point-item { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; background: #eee; padding: 4px; border-radius: 4px; }
+    .btn-action { background: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 4px; margin-top: 5px; width: 100%; }
+    .btn-action:hover { background: #0056b3; }
+    .btn-delete { background: #dc3545; color: white; border: none; border-radius: 3px; margin-left: 5px; font-size: 10px; cursor: pointer;}
+    .coord-display { font-family: monospace; color: #333; margin-top: 5px;}
 
+    #legend {
+      margin-top:10px; padding:8px; border:1px solid #aaa; border-radius:6px;
+      background:#f8f8f8;
+    }
+
+    #challengeSection {
+      margin-top: 12px;
+      border-top:1px solid #ccc;
+      padding-top:10px;
+    }
+    #challengeInfo { font-size: 13px; }
+    #challengeFeedback, #zoneFeedback, #csvChallengeMsg {
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .ok { color: #0a7a25; }
+    .ko { color: #b00020; }
+
+    #errorCounter {
+      margin-top:6px;
+      font-size:13px;
+    }
+
+    #logoInstitut {
+      position: absolute;
+      bottom: 15px;
+      right: 15px;
+      width: 80px;
+      z-index: 20;
+      opacity: 0.95;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <!-- Logo institut placeholder -->
+  <img id="logoInstitut" src="" alt="Institut logo" style="display:none;" />
+
+  <div id="panel">
+    <!-- Botó idioma -->
+    <button id="langToggleBtn" style="width:100%; margin-bottom:6px;" onclick="toggleLanguage()">
+      🌐 English / Català
+    </button>
+
+    <h3 id="mainTitle">Ex3 – Parallels and Meridians</h3>
+
+    <div class="slider-group">
+      <label id="latLabel">Latitude:</label>
+      <!-- CORRECCIÓ: min/max a 90 -->
+      <input type="range" id="lat" min="-90" max="90" value="41" step="0.1">
+      <input type="number" id="latInput" min="-90" max="90" step="0.01" value="41">
+      <button onclick="adjustLat(-0.1)">–</button>
+      <button onclick="adjustLat(0.1)">+</button>
+    </div>
+
+    <div class="slider-group">
+      <label id="lonLabel">Longitude:</label>
+      <input type="range" id="lon" min="-180" max="180" value="1" step="0.1">
+      <input type="number" id="lonInput" min="-180" max="180" step="0.01" value="1">
+      <button onclick="adjustLon(-0.1)">–</button>
+      <button onclick="adjustLon(0.1)">+</button>
+    </div>
+
+    <div class="coord-display"><b id="decLabel">Decimal:</b> <span id="dec">—</span></div>
+    <div class="coord-display"><b id="dmsLabel">DMS:</b> <span id="dms">—</span></div>
+
+    <!-- Botó per mostrar/amagar línies importants -->
+    <button id="toggleLinesBtn" onclick="toggleImportantLines()" style="width:100%; margin-top:10px;">
+      👁️ Show / Hide important lines
+    </button>
+
+    <!-- Llegenda de colors -->
+    <div id="legend" style="display:none;">
+      <div id="legendContent"></div>
+    </div>
+
+    <!-- REPTE 3: Joc interactiu -->
+    <div id="challengeSection">
+      <h3 id="challengeTitle">Challenge 3 – Game</h3>
+      <button id="startChallengeBtn" class="btn-action" onclick="startChallenge()">
+        🎯 Start challenge
+      </button>
+      <div id="challengeInfo"></div>
+
+      <button id="validatePositionBtn" class="btn-action"
+              onclick="validatePosition()"
+              style="margin-top:6px; display:none;">
+        ✅ Validate position
+      </button>
+      <div id="challengeFeedback"></div>
+
+      <div id="errorCounter">
+        ❌ <span id="errorCounterLabel">Errors:</span> <span id="errorCount">0</span>
+      </div>
+
+      <div id="zoneQuestion" style="display:none; margin-top:8px;">
+        <b id="zoneQuestionTitle">In which climatic zone / parallel is this point?</b><br>
+        <select id="zoneSelect" style="width:100%; margin-top:4px;"></select>
+        <button id="validateZoneBtn" class="btn-action" onclick="validateZone()" style="margin-top:6px;">
+          📌 Validate zone/parallel
+        </button>
+        <div id="zoneFeedback"></div>
+      </div>
+
+      <button id="downloadChallengeBtn" class="btn-action"
+              onclick="downloadChallengeCSV()"
+              style="margin-top:8px; display:none;">
+        📥 Download challenge results (.csv)
+      </button>
+      <div id="csvChallengeMsg"></div>
+    </div>
+
+    <!-- Secció per guardar punts lliures -->
+    <div id="savedList">
+      <h3 id="savedTitle">My points</h3>
+      <input type="text" id="pointName" placeholder="Place name (e.g. Home)" style="width: 70%;">
+      <button id="savePointBtn" onclick="saveCurrentPoint()" style="width: 25%;">Save</button>
+      
+      <div id="listContainer" style="margin-top:10px; max-height: 150px; overflow-y: auto;">
+        <em id="noPointsText" style="color:#777;">No points saved yet.</em>
+      </div>
+
+      <button id="downloadPointsBtn" class="btn-action" onclick="downloadCSV()">
+        📥 Download saved points (.csv)
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // ==========================
+    //  I18N (EN / CA)
+    // ==========================
+    const i18n = {
+      en: {
+        mainTitle: "Ex3 – Parallels and Meridians",
+        latLabel: "Latitude:",
+        lonLabel: "Longitude:",
+        decLabel: "Decimal:",
+        dmsLabel: "DMS:",
+        toggleLinesBtn: "👁️ Show / Hide important lines",
+        challengeTitle: "Challenge 3 – Game",
+        startChallengeBtn: "🎯 Start challenge",
+        validatePositionBtn: "✅ Validate position",
+        validateZoneBtn: "📌 Validate zone/parallel",
+        downloadChallengeBtn: "📥 Download challenge results (.csv)",
+        errorCounterLabel: "Errors:",
+        zoneQuestionTitle: "In which climatic zone / parallel is this point?",
+        zoneSelectPlaceholder: "— Choose an option —",
+        savedTitle: "My points",
+        savePointBtn: "Save",
+        noPointsText: "No points saved yet.",
+        downloadPointsBtn: "📥 Download saved points (.csv)",
+        langToggleBtn: "🌐 English / Català",
+        legend: {
+          title: "Legend – important lines",
+          equator: "Equator (0°)",
+          cancer: "Tropic of Cancer (23.5°N)",
+          capricorn: "Tropic of Capricorn (23.5°S)",
+          arctic: "Arctic Circle (66.5°N)",
+          antarctic: "Antarctic Circle (66.5°S)",
+          meridian0: "Prime Meridian (0° – Greenwich)"
+        },
+        challengeTexts: {
+          startInfo: "Challenge started. Move the yellow point to the requested place and click “Validate position”.",
+          cityTitle: (n, total, name) => 
+            `Place ${n} of ${total} – City<br>Find the city: <b>${name}</b>.<br>Move the yellow point and click “Validate position”.`,
+          pointTitle: (n, total, name) =>
+            `Place ${n} of ${total} – Special place<br>Find: <b>${name}</b>.<br>Move the yellow point and click “Validate position”.`,
+          posOk: "Great! You are close enough to the correct place. Now classify it by climatic zone / parallel.",
+          posKo: "You still seem far away. Look carefully at the map and try again!",
+          zoneMissing: "You must choose an option.",
+          zoneOk: "Correct! Good classification.",
+          zoneKo: "That is not the best zone. Think about the latitude and the major parallels and try again.",
+          allDoneTop: "You have completed all the places in the challenge!",
+          allDoneInfo: "Challenge completed. Download the CSV file and upload it to Classroom.",
+          noCsvYet: "There are no challenge results to download yet.",
+          csvOk: "Challenge CSV file downloaded correctly."
+        },
+        freePoints: {
+          noPoints: "No points saved yet."
+        },
+        csvHeaders: {
+          challenge: "Name,Type,Latitude,Longitude,Zone,Google Maps,Errors\n",
+          freePoints: "Name,Latitude,Longitude\n"
+        }
+      },
+      ca: {
+        mainTitle: "Ex3 – Paral·lels i Meridians",
+        latLabel: "Latitud:",
+        lonLabel: "Longitud:",
+        decLabel: "Decimal:",
+        dmsLabel: "GMS:",
+        toggleLinesBtn: "👁️ Mostra / Amaga línies importants",
+        challengeTitle: "Repte 3 – Joc",
+        startChallengeBtn: "🎯 Comença el repte",
+        validatePositionBtn: "✅ Validar posició",
+        validateZoneBtn: "📌 Validar zona/paral·lel",
+        downloadChallengeBtn: "📥 Descarregar resultats del repte (.csv)",
+        errorCounterLabel: "Errades:",
+        zoneQuestionTitle: "En quina zona climàtica / paral·lel es troba aquest punt?",
+        zoneSelectPlaceholder: "— Tria una opció —",
+        savedTitle: "Els meus punts",
+        savePointBtn: "Guardar",
+        noPointsText: "Cap punt guardat encara.",
+        downloadPointsBtn: "📥 Descarregar punts guardats (.csv)",
+        langToggleBtn: "🌐 Català / English",
+        legend: {
+          title: "Llegenda – línies importants",
+          equator: "Equador (0°)",
+          cancer: "Tròpic de Càncer (23,5°N)",
+          capricorn: "Tròpic de Capricorn (23,5°S)",
+          arctic: "Cercle Polar Àrtic (66,5°N)",
+          antarctic: "Cercle Polar Antàrtic (66,5°S)",
+          meridian0: "Meridià 0 (Greenwich)"
+        },
+        challengeTexts: {
+          startInfo: "Repte iniciat. Mou el punt groc fins al lloc que es demana i prem «Validar posició».",
+          cityTitle: (n, total, name) => 
+            `Lloc ${n} de ${total} – Ciutat<br>Troba la ciutat: <b>${name}</b>.<br>Mou el punt groc i prem «Validar posició».`,
+          pointTitle: (n, total, name) =>
+            `Lloc ${n} de ${total} – Punt important<br>Troba el punt: <b>${name}</b>.<br>Mou el punt groc i prem «Validar posició».`,
+          posOk: "Molt bé! Estàs prou a prop del lloc correcte. Ara classifica'l segons la zona/paral·lel.",
+          posKo: "Encara sembles lluny. Observa bé el mapa i torna-ho a provar!",
+          zoneMissing: "Has de triar una opció.",
+          zoneOk: "Correcte! Bona classificació.",
+          zoneKo: "No és ben bé aquesta zona. Pensa en la latitud i els grans paral·lels i torna-ho a provar.",
+          allDoneTop: "Has completat tots els llocs del repte!",
+          allDoneInfo: "Repte completat. Descarrega el fitxer CSV i entrega'l al Classroom.",
+          noCsvYet: "Encara no hi ha resultats del repte per descarregar.",
+          csvOk: "Fitxer CSV del repte descarregat correctament."
+        },
+        freePoints: {
+          noPoints: "Cap punt guardat encara."
+        },
+        csvHeaders: {
+          challenge: "Nom,Tipus,Latitud,Longitud,Zona,Google Maps,Errades\n",
+          freePoints: "Nom,Latitud,Longitud\n"
+        }
+      }
+    };
+
+    let currentLang = "en";
+    const zoneKeys = [
+      "polar_north",
+      "temperate_north",
+      "tropical_north",
+      "equatorial",
+      "tropical_south",
+      "temperate_south",
+      "polar_south"
+    ];
+
+    const zonesByLang = {
+      en: {
+        polar_north: "Polar zone north (above Arctic Circle)",
+        temperate_north: "Temperate zone north (between Tropic of Cancer and Arctic Circle)",
+        tropical_north: "Tropical zone north (between Equator and Tropic of Cancer)",
+        equatorial: "Equatorial zone (near the Equator)",
+        tropical_south: "Tropical zone south (between Equator and Tropic of Capricorn)",
+        temperate_south: "Temperate zone south (between Tropic of Capricorn and Antarctic Circle)",
+        polar_south: "Polar zone south (below Antarctic Circle)"
+      },
+      ca: {
+        polar_north: "Zona polar nord (per sobre del Cercle Polar Àrtic)",
+        temperate_north: "Zona temperada nord (entre Tròpic de Càncer i Cercle Polar Àrtic)",
+        tropical_north: "Zona tropical nord (entre l'Equador i el Tròpic de Càncer)",
+        equatorial: "Zona equatorial (prop de l'Equador)",
+        tropical_south: "Zona tropical sud (entre l'Equador i el Tròpic de Capricorn)",
+        temperate_south: "Zona temperada sud (entre Tròpic de Capricorn i Cercle Polar Antàrtic)",
+        polar_south: "Zona polar sud (per sota del Cercle Polar Antàrtic)"
+      }
+    };
+
+    function t() {
+      return i18n[currentLang];
+    }
+
+    function populateZoneSelect() {
+      const select = document.getElementById("zoneSelect");
+      select.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = t().zoneSelectPlaceholder;
+      select.appendChild(placeholder);
+
+      const labels = zonesByLang[currentLang];
+      zoneKeys.forEach(key => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = labels[key];
+        select.appendChild(opt);
+      });
+    }
+
+    function updateLegend() {
+      const lc = document.getElementById("legendContent");
+      const L = t().legend;
+      lc.innerHTML = `
+        <b>${L.title}</b><br>
+        <span style="color:yellow;">■</span> ${L.equator}<br>
+        <span style="color:orange;">■</span> ${L.cancer}<br>
+        <span style="color:orange;">■</span> ${L.capricorn}<br>
+        <span style="color:cyan;">■</span> ${L.arctic}<br>
+        <span style="color:cyan;">■</span> ${L.antarctic}<br>
+        <span style="color:lime;">■</span> ${L.meridian0}
+      `;
+    }
+
+    function updateLanguage() {
+      document.getElementById("mainTitle").textContent = t().mainTitle;
+      document.getElementById("latLabel").textContent = t().latLabel;
+      document.getElementById("lonLabel").textContent = t().lonLabel;
+      document.getElementById("decLabel").textContent = t().decLabel;
+      document.getElementById("dmsLabel").textContent = t().dmsLabel;
+      document.getElementById("toggleLinesBtn").textContent = t().toggleLinesBtn;
+
+      document.getElementById("challengeTitle").textContent = t().challengeTitle;
+      document.getElementById("startChallengeBtn").textContent = t().startChallengeBtn;
+      document.getElementById("validatePositionBtn").textContent = t().validatePositionBtn;
+      document.getElementById("validateZoneBtn").textContent = t().validateZoneBtn;
+      document.getElementById("downloadChallengeBtn").textContent = t().downloadChallengeBtn;
+      document.getElementById("errorCounterLabel").textContent = t().errorCounterLabel;
+      document.getElementById("zoneQuestionTitle").textContent = t().zoneQuestionTitle;
+
+      document.getElementById("savedTitle").textContent = t().savedTitle;
+      document.getElementById("savePointBtn").textContent = t().savePointBtn;
+      document.getElementById("downloadPointsBtn").textContent = t().downloadPointsBtn;
+      document.getElementById("langToggleBtn").textContent = t().langToggleBtn;
+
+      document.getElementById("pointName").placeholder =
+        currentLang === "en" ? "Place name (e.g. Home)" : "Nom del lloc (ex: Casa)";
+
+      if (savedPoints.length === 0) {
+        document.getElementById("noPointsText").textContent = t().noPointsText;
+      }
+
+      populateZoneSelect();
+      updateLegend();
+
+      // Actualitzar textos del repte si està actiu
+      if (currentTaskIndex >= 0 && currentTaskIndex < challengeTasks.length) {
+        updateChallengeUI();
+      }
+    }
+
+    function toggleLanguage() {
+      currentLang = (currentLang === "en") ? "ca" : "en";
+      updateLanguage();
+    }
+
+    // ==========================
+    //  CESIUM I LÒGICA DEL JOC
+    // ==========================
+
+    Cesium.Ion.defaultAccessToken = 
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4MjJjZjVkYy0xOWJhLTRiNzktYTE4Yi0zMmQ2ZTE3YzNmYmYiLCJpZCI6MzU1MzA3LCJpYXQiOjE3NjE3Njk0NTd9.R1wbKFmZ6mLuhA9g1_fQYW5XG3LkhuGtwvKnSJkk61g';
+
+    const viewer = new Cesium.Viewer('cesiumContainer', {
+      baseLayerPicker: true,
+      terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+      geocoder: false,
+      homeButton: false,
+      sceneModePicker: false,
+      navigationHelpButton: false,
+      timeline: false,
+      animation: false,
+      selectionIndicator: false
+    });
+
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(0, 0, 70000000),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 }
+    });
+
+    function toDMS(deg, isLat) {
+      const abs = Math.abs(deg);
+      const d = Math.floor(abs);
+      const mFloat = (abs - d) * 60;
+      const m = Math.floor(mFloat);
+      const s = ((mFloat - m) * 60).toFixed(2);
+      const dir = deg >= 0 ? (isLat ? 'N' : 'E') : (isLat ? 'S' : 'W');
+      return `${d}°${m}'${s}"${dir}`;
+    }
+
+    let latLine, lonLine, pointEntity;
+    let savedPoints = [];
+    let savedEntities = [];
+
+    // CORRECCIÓ: Permetre quadrícula fins a 90º
+    function addGlobalGraticule(step = 10) {
+      for (let lat=-90; lat<=90; lat+=step) {
+        const line = [];
+        for (let lon=-180; lon<=180; lon+=2) {
+          line.push(Cesium.Cartesian3.fromDegrees(lon, lat));
+        }
+        viewer.entities.add({
+          polyline: { positions: line, width: 1, material: Cesium.Color.GRAY.withAlpha(0.4) }
+        });
+      }
+      for (let lon=-180; lon<=180; lon+=step) {
+        const line = [];
+        for (let lat=-90; lat<=90; lat+=2) {
+          line.push(Cesium.Cartesian3.fromDegrees(lon, lat));
+        }
+        viewer.entities.add({
+          polyline: { positions: line, width: 1, material: Cesium.Color.GRAY.withAlpha(0.4) }
+        });
+      }
+    }
+    addGlobalGraticule();
+
+    // --- Línies geogràfiques importants ---
+    const importantLines = [];
+    let importantLinesVisible = true;
+
+    function addImportantLine(lat, lon, color, name) {
+      const positions = [];
+      if (lat !== null) {
+        for (let lo = -180; lo <= 180; lo += 2) {
+          positions.push(Cesium.Cartesian3.fromDegrees(lo, lat));
+        }
+      } else {
+        for (let la = -90; la <= 90; la += 2) { // Ampliat a -90/90
+          positions.push(Cesium.Cartesian3.fromDegrees(lon, la));
+        }
+      }
+
+      const entity = viewer.entities.add({
+        name: name,
+        polyline: {
+          positions: positions,
+          width: 3,
+          material: color
+        }
+      });
+
+      importantLines.push({ lat, lon, entity, name, baseColor: color });
+    }
+
+    addImportantLine(0, null, Cesium.Color.YELLOW, "Equator");
+    addImportantLine(23.5, null, Cesium.Color.ORANGE, "Tropic of Cancer");
+    addImportantLine(-23.5, null, Cesium.Color.ORANGE, "Tropic of Capricorn");
+    addImportantLine(66.5, null, Cesium.Color.CYAN, "Arctic Circle");
+    addImportantLine(-66.5, null, Cesium.Color.CYAN, "Antarctic Circle");
+    addImportantLine(null, 0, Cesium.Color.LIME, "Prime Meridian");
+
+    function toggleImportantLines() {
+      importantLinesVisible = !importantLinesVisible;
+      importantLines.forEach(item => {
+        item.entity.show = importantLinesVisible;
+      });
+      document.getElementById("legend").style.display =
+        importantLinesVisible ? "block" : "none";
+    }
+
+    function highlightNearImportantLines(lat, lon) {
+      importantLines.forEach(item => {
+        const line = item.entity.polyline;
+        line.material = item.baseColor;
+
+        let dist;
+        if (item.lat !== null) {
+          dist = Math.abs(lat - item.lat);
+        } else {
+          dist = Math.abs(lon - item.lon);
+        }
+
+        if (dist < 0.4) {
+          line.material = Cesium.Color.RED.withAlpha(0.9);
+          setTimeout(() => {
+            line.material = item.baseColor;
+          }, 350);
+        }
+      });
+    }
+
+    // --- Ciutats ---
+    const cities = [
+      {name: "Lleida", lat:41.619, lon:0.615},
+      {name: "Barcelona", lat:41.3851, lon:2.1734},
+      {name: "Girona", lat:41.9794, lon:2.8214},
+      {name: "Tarragona", lat:41.1189, lon:1.2445},
+      {name: "Madrid", lat:40.4168, lon:-3.7038},
+      {name: "Bilbao", lat:43.2630, lon:-2.9350},
+      {name: "París", lat:48.8566, lon:2.3522},
+      {name: "Londres", lat:51.5074, lon:-0.1278},
+      {name: "Berlín", lat:52.52, lon:13.405},
+      {name: "Roma", lat:41.9028, lon:12.4964},
+      {name: "Moscou", lat:55.7558, lon:37.6173},
+      {name: "Nova Delhi", lat:28.6139, lon:77.2090},
+      {name: "Pequín", lat:39.9042, lon:116.4074},
+      {name: "Shanghai", lat:31.2304, lon:121.4737},
+      {name: "Seül", lat:37.5665, lon:126.9780},
+      {name: "Nova York", lat:40.7128, lon:-74.0060},
+      {name: "Tòquio", lat:35.6762, lon:139.6503},
+      {name: "Sydney", lat:-33.8688, lon:151.2093},
+      {name: "Buenos Aires", lat:-34.6037, lon:-58.3816},
+      {name: "El Caire", lat:30.0444, lon:31.2357},
+
+      // Zona equatorial
+      {name:"Quito", lat:-0.18, lon:-78.47},
+      {name:"Kampala", lat:0.31, lon:32.58},
+      {name:"Singapur", lat:1.29, lon:103.85},
+      {name:"Macapá", lat:0.03, lon:-51.07},
+
+      // Entre tròpics
+      {name:"Cancún", lat:21.16, lon:-86.85},
+      {name:"Mumbai", lat:19.07, lon:72.88},
+      {name:"Dar es Salaam", lat:-6.8, lon:39.28},
+      {name:"Brisbane", lat:-27.47, lon:153.02},
+
+      // Zona polar nord
+      {name:"Longyearbyen", lat:78.22, lon:15.64},
+      {name:"Utqiaġvik", lat:71.29, lon:-156.76},
+      {name:"Nuuk", lat:64.18, lon:-51.72}
+    ];
+
+    cities.forEach(c => {
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(c.lon, c.lat),
+        label: {
+          text: c.name,
+          font: "16px sans-serif",
+          fillColor: Cesium.Color.YELLOW,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -10),
+          scaleByDistance: new Cesium.NearFarScalar(1.0e3, 3.0, 2.0e7, 0.5),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 3.0e7)
+        }
+      });
+    });
+
+    // --- Punts especials ---
+    const specialPoints = [
+      {name:"Canal de Panamà", lat:9.0, lon:-79.6},
+      {name:"Cap d'Horn", lat:-55.98, lon:-67.29},
+      {name:"Everest", lat:27.9881, lon:86.9250},
+      {name:"Estret de Gibraltar", lat:36.0, lon:-5.6},
+      {name:"Cap de Bona Esperança", lat:-34.35, lon:18.47},
+      {name:"Gran Barrera de Corall", lat:-18.2871, lon:147.6992},
+      {name:"Pol Nord", lat:90.0, lon:0.0},
+      {name:"Pol Sud", lat:-90.0, lon:0.0},
+      {name:"McMurdo (base científica)", lat:-77.85, lon:166.66},
+      {name:"Base científica Esperanza (Antàrtida)", lat:-63.40, lon:-56.99},
+      {name:"Amundsen-Scott (base científica)", lat:-90, lon:0}
+    ];
+
+    specialPoints.forEach(p => {
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat),
+        point: {
+          pixelSize: 7,
+          color: Cesium.Color.ORANGERED,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 1
+        },
+        label: {
+          text: p.name,
+          font: "12px sans-serif",
+          fillColor: Cesium.Color.ORANGERED,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.TOP,
+          pixelOffset: new Cesium.Cartesian2(0, 12),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 1.0e7)
+        }
+      });
+    });
+
+    function updateScene() {
+      const lat = parseFloat(document.getElementById("lat").value);
+      const lon = parseFloat(document.getElementById("lon").value);
+      
+      document.getElementById("latInput").value = lat;
+      document.getElementById("lonInput").value = lon;
+
+      if (latLine) viewer.entities.remove(latLine);
+      if (lonLine) viewer.entities.remove(lonLine);
+      if (pointEntity) viewer.entities.remove(pointEntity);
+
+      const parallel = [];
+      for (let lo=-180; lo<=180; lo+=2) {
+        parallel.push(Cesium.Cartesian3.fromDegrees(lo, lat));
+      }
+      latLine = viewer.entities.add({
+        polyline: { positions: parallel, width: 2, material: Cesium.Color.RED }
+      });
+
+      const meridian = [];
+      for (let la=-90; la<=90; la+=2) { // Ampliat a -90/90
+        meridian.push(Cesium.Cartesian3.fromDegrees(lon, la));
+      }
+      lonLine = viewer.entities.add({
+        polyline: { positions: meridian, width: 2, material: Cesium.Color.BLUE }
+      });
+
+      pointEntity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        point: {
+          pixelSize: 10,
+          color: Cesium.Color.YELLOW,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2
+        }
+      });
+
+      document.getElementById("dec").textContent = lat.toFixed(1)+", "+lon.toFixed(1);
+      document.getElementById("dms").textContent = toDMS(lat,true)+", "+toDMS(lon,false);
+
+      highlightNearImportantLines(lat, lon);
+    }
+
+    // --- REPTE 3: lògica del joc ---
+
+    let challengeTasks = [];
+    let currentTaskIndex = -1;
+    let challengeResults = [];
+    let waitingZone = false;
+    let challengeErrors = 0;
+
+    function shuffleArray(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function getRandomSubset(array, count) {
+      const shuffled = shuffleArray(array);
+      return shuffled.slice(0, count);
+    }
+
+    function startChallenge() {
+      const info = document.getElementById("challengeInfo");
+      const feedback = document.getElementById("challengeFeedback");
+      const zoneFeedback = document.getElementById("zoneFeedback");
+      const zoneQuestion = document.getElementById("zoneQuestion");
+      const validateBtn = document.getElementById("validatePositionBtn");
+      const downloadBtn = document.getElementById("downloadChallengeBtn");
+      const csvMsg = document.getElementById("csvChallengeMsg");
+
+      const randomCities = getRandomSubset(cities, 3).map(c => ({
+        type: "City",
+        name: c.name,
+        lat: c.lat,
+        lon: c.lon
+      }));
+      const randomSpecial = getRandomSubset(specialPoints, 2).map(p => ({
+        type: "Point",
+        name: p.name,
+        lat: p.lat,
+        lon: p.lon
+      }));
+
+      challengeTasks = shuffleArray(randomCities.concat(randomSpecial));
+      currentTaskIndex = 0;
+      challengeResults = [];
+      waitingZone = false;
+      challengeErrors = 0;
+      document.getElementById("errorCount").textContent = challengeErrors;
+
+      info.innerHTML = t().challengeTexts.startInfo;
+      feedback.textContent = "";
+      feedback.className = "";
+      zoneFeedback.textContent = "";
+      zoneFeedback.className = "";
+      zoneQuestion.style.display = "none";
+      validateBtn.style.display = "block";
+      downloadBtn.style.display = "none";
+      csvMsg.textContent = "";
+      csvMsg.className = "";
+
+      updateChallengeUI();
+    }
+
+    function updateChallengeUI() {
+      const info = document.getElementById("challengeInfo");
+      if (currentTaskIndex < 0 || currentTaskIndex >= challengeTasks.length) {
+        info.innerHTML = t().challengeTexts.allDoneInfo;
+        return;
+      }
+      const task = challengeTasks[currentTaskIndex];
+      const total = challengeTasks.length;
+      const num = currentTaskIndex + 1;
+
+      if (task.type === "City") {
+        info.innerHTML = t().challengeTexts.cityTitle(num, total, task.name);
+      } else {
+        info.innerHTML = t().challengeTexts.pointTitle(num, total, task.name);
+      }
+    }
+
+    function validatePosition() {
+      if (currentTaskIndex < 0 || currentTaskIndex >= challengeTasks.length) return;
+
+      const lat = parseFloat(document.getElementById("lat").value);
+      const lon = parseFloat(document.getElementById("lon").value);
+      const task = challengeTasks[currentTaskIndex];
+      const feedback = document.getElementById("challengeFeedback");
+      const validateBtn = document.getElementById("validatePositionBtn");
+      const zoneQuestion = document.getElementById("zoneQuestion");
+      const zoneFeedback = document.getElementById("zoneFeedback");
+
+      const dLat = Math.abs(lat - task.lat);
+      const dLon = Math.abs(lon - task.lon);
+      const threshold = 1.0;
+
+      if (dLat <= threshold && dLon <= threshold) {
+        feedback.textContent = t().challengeTexts.posOk;
+        feedback.className = "ok";
+        waitingZone = true;
+        zoneQuestion.style.display = "block";
+        zoneFeedback.textContent = "";
+        zoneFeedback.className = "";
+        validateBtn.style.display = "none";
+      } else {
+        feedback.textContent = t().challengeTexts.posKo;
+        feedback.className = "ko";
+        challengeErrors++;
+        document.getElementById("errorCount").textContent = challengeErrors;
+      }
+    }
+
+    function getZoneKey(lat) {
+      if (lat >= 66.5) {
+        return "polar_north";
+      } else if (lat >= 23.5 && lat < 66.5) {
+        return "temperate_north";
+      } else if (lat > 5 && lat < 23.5) {
+        return "tropical_north";
+      } else if (lat >= -5 && lat <= 5) {
+        return "equatorial";
+      } else if (lat < -5 && lat > -23.5) {
+        return "tropical_south";
+      } else if (lat <= -23.5 && lat > -66.5) {
+        return "temperate_south";
+      } else {
+        return "polar_south";
+      }
+    }
+
+    function validateZone() {
+      if (!waitingZone || currentTaskIndex < 0 || currentTaskIndex >= challengeTasks.length) return;
+
+      const task = challengeTasks[currentTaskIndex];
+      const select = document.getElementById("zoneSelect");
+      const chosenKey = select.value;
+      const zoneFeedback = document.getElementById("zoneFeedback");
+      const feedback = document.getElementById("challengeFeedback");
+      const validateBtn = document.getElementById("validatePositionBtn");
+      const zoneQuestion = document.getElementById("zoneQuestion");
+      const downloadBtn = document.getElementById("downloadChallengeBtn");
+
+      if (!chosenKey) {
+        zoneFeedback.textContent = t().challengeTexts.zoneMissing;
+        zoneFeedback.className = "ko";
+        return;
+      }
+
+      const correctKey = getZoneKey(task.lat);
+
+      if (chosenKey === correctKey) {
+        zoneFeedback.textContent = t().challengeTexts.zoneOk;
+        zoneFeedback.className = "ok";
+        waitingZone = false;
+
+        const mapLink = `https://maps.google.com/?q=${task.lat.toFixed(1)},${task.lon.toFixed(1)}`;
+        const zoneName = zonesByLang[currentLang][correctKey];
+
+        challengeResults.push({
+          name: task.name,
+          type: task.type,
+          targetLat: task.lat.toFixed(1),
+          targetLon: task.lon.toFixed(1),
+          zoneName: zoneName,
+          mapsUrl: mapLink
+        });
+
+        currentTaskIndex++;
+        if (currentTaskIndex < challengeTasks.length) {
+          select.value = "";
+          zoneQuestion.style.display = "none";
+          validateBtn.style.display = "block";
+          feedback.textContent = "";
+          feedback.className = "";
+          zoneFeedback.textContent = "";
+          zoneFeedback.className = "";
+          updateChallengeUI();
+        } else {
+          feedback.textContent = t().challengeTexts.allDoneTop;
+          feedback.className = "ok";
+          zoneQuestion.style.display = "none";
+          validateBtn.style.display = "none";
+          downloadBtn.style.display = "block";
+          document.getElementById("challengeInfo").innerHTML =
+            t().challengeTexts.allDoneInfo;
+        }
+      } else {
+        zoneFeedback.textContent = t().challengeTexts.zoneKo;
+        zoneFeedback.className = "ko";
+        challengeErrors++;
+        document.getElementById("errorCount").textContent = challengeErrors;
+      }
+    }
+
+    function downloadChallengeCSV() {
+      const msg = document.getElementById("csvChallengeMsg");
+      if (challengeResults.length === 0) {
+        msg.textContent = t().challengeTexts.noCsvYet;
+        msg.className = "ko";
+        return;
+      }
+      msg.textContent = "";
+      msg.className = "";
+
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += i18n[currentLang].csvHeaders.challenge;
+
+      challengeResults.forEach(r => {
+        csvContent += `"${r.name}",${r.type},${r.targetLat},${r.targetLon},"${r.zoneName}",${r.mapsUrl},${challengeErrors}\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "repte3_resultats.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      msg.textContent = t().challengeTexts.csvOk;
+      msg.className = "ok";
+    }
+
+    // --- PUNTS GUARDATS LLIURES ---
+
+    function saveCurrentPoint() {
+      const lat = parseFloat(document.getElementById("lat").value);
+      const lon = parseFloat(document.getElementById("lon").value);
+      const nameInput = document.getElementById("pointName");
+      const defaultName = (currentLang === "en") ? "Point" : "Punt";
+      const name = nameInput.value.trim() || `${defaultName} ${savedPoints.length + 1}`;
+
+      savedPoints.push({ name, lat, lon });
+
+      const ent = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        point: { pixelSize: 8, color: Cesium.Color.LIME, outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
+        label: {
+          text: name,
+          font: "12px sans-serif",
+          fillColor: Cesium.Color.LIME,
+          pixelOffset: new Cesium.Cartesian2(0, -10),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 1.0e7)
+        }
+      });
+      savedEntities.push(ent);
+
+      nameInput.value = "";
+      updateListUI();
+    }
+
+    function removePoint(index) {
+      savedPoints.splice(index, 1);
+      viewer.entities.remove(savedEntities[index]);
+      savedEntities.splice(index, 1);
+      updateListUI();
+    }
+
+    function updateListUI() {
+      const container = document.getElementById("listContainer");
+      container.innerHTML = "";
+
+      if (savedPoints.length === 0) {
+        container.innerHTML = `<em id="noPointsText" style="color:#777;">${t().freePoints.noPoints}</em>`;
+        return;
+      }
+
+      savedPoints.forEach((p, idx) => {
+        const div = document.createElement("div");
+        div.className = "point-item";
+        div.innerHTML = `
+          <span><b>${p.name}</b><br>${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}</span>
+          <button class="btn-delete" onclick="removePoint(${idx})">X</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function downloadCSV() {
+      if (savedPoints.length === 0) {
+        return;
+      }
+
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += i18n[currentLang].csvHeaders.freePoints;
+
+      savedPoints.forEach(p => {
+        csvContent += `"${p.name}",${p.lat},${p.lon}\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "resultats_geografia.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // --- CONTROL SLIDERS (CORREGIT) ---
+
+    function adjustLat(delta) {
+      let val = parseFloat(document.getElementById("lat").value) + delta;
+      // CORRECCIÓ: Límits a 90 i -90
+      if (val > 90) val = 90;
+      if (val < -90) val = -90;
+      val = Math.round(val * 100) / 100;
+      document.getElementById("lat").value = val;
+      updateScene();
+    }
+
+    function adjustLon(delta) {
+      let val = parseFloat(document.getElementById("lon").value) + delta;
+      if (val > 180) val = 180;
+      if (val < -180) val = -180;
+      val = Math.round(val * 100) / 100;
+      document.getElementById("lon").value = val;
+      updateScene();
+    }
+
+    document.getElementById("lat").addEventListener("input", updateScene);
+    document.getElementById("lon").addEventListener("input", updateScene);
+    
+    document.getElementById("latInput").addEventListener("change", e => {
+      let val = parseFloat(e.target.value);
+      // CORRECCIÓ: Límits a 90 i -90
+      if(val > 90) val = 90; 
+      if(val < -90) val = -90;
+      document.getElementById("lat").value = val;
+      updateScene();
+    });
+    
+    document.getElementById("lonInput").addEventListener("change", e => {
+      let val = parseFloat(e.target.value);
+      if(val > 180) val = 180; if(val < -180) val = -180;
+      document.getElementById("lon").value = val;
+      updateScene();
+    });
+
+    // Inicialització
+    updateScene();
+    populateZoneSelect();
+    updateLegend();
+    updateLanguage(); // arrenca en anglès
+  </script>
+</body>
+</html>
