@@ -2,7 +2,7 @@
 <html lang="ca">
 <head>
   <meta charset="utf-8">
-  <title>Repte 3 VR - Simulador Temps Real i Veu</title>
+  <title>Repte 3 VR - Simulador Astronòmic Precis</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
@@ -10,28 +10,50 @@
     
     // --- LECTURA DE LA DATA I HORA REALS ---
     let dataSistema = new Date();
-    let dataEquinocci = new Date(dataSistema.getFullYear(), 2, 21); // 21 de Març de l'any actual
+    let dataEquinocci = new Date(dataSistema.getFullYear(), 2, 21); // 21 de Març
     
     // VARIABLES DEL TEMPS
     let tempsActiu = false;
-    let velocitatsPermeses =[-50, -25, -10, -5, -2, -1, 1, 2, 5, 10, 25, 50];
-    let indexVelocitat = 6; // Posició de l'1x a la llista
+    let velocitatsPermeses =[-50, -30, -10, -5, -2, -1, 1, 2, 5, 10, 30, 50];
+    let indexVelocitat = 6; // Comença a 1x (temps real)
     let velocitatTemps = velocitatsPermeses[indexVelocitat]; 
     
-    // Calculem la diferència exacta de dies entre avui i l'últim 21 de Març
+    // Calculem dies exactes respecte l'equinocci
     let diaActual = (dataSistema - dataEquinocci) / (1000 * 60 * 60 * 24); 
     let horaActual = dataSistema.getHours() + (dataSistema.getMinutes() / 60); 
     
     let solEncès = true;
     let ultimEventDisparat = null; 
+    let audioCtx = null;
 
-    // --- MOTOR DE VEU SINTETITZADA (TTS) ---
+    // --- GENERADOR DE SO (BEEP) ---
+    function ferBip() {
+      if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      let osc = audioCtx.createOscillator();
+      let gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Nota La
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime); // Volum baixet
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    // --- MOTOR DE VEU (TEXT-TO-SPEECH) ---
     function parlar(text) {
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Tallem si ja estava parlant
+        window.speechSynthesis.cancel(); 
         let missatge = new SpeechSynthesisUtterance(text);
-        missatge.lang = 'ca-ES'; // Idioma Català
-        missatge.rate = 1.0;     // Velocitat normal
+        
+        // Intentem buscar la veu en Català o Espanyol a les ulleres
+        let voices = window.speechSynthesis.getVoices();
+        let voice = voices.find(v => v.lang.startsWith('ca')) || voices.find(v => v.lang.startsWith('es'));
+        if (voice) missatge.voice = voice;
+        
+        missatge.lang = voice ? voice.lang : 'ca-ES';
+        missatge.rate = 1.0;     
         window.speechSynthesis.speak(missatge);
       }
     }
@@ -79,8 +101,9 @@
           if (tocats.length > 0) {
             let tocat = tocats[0];
 
-            // --- CONSOLA DE COMANDAMENT ---
+            // --- CONSOLA ---
             if (tocat.classList.contains('boto-vr')) {
+              ferBip();
               batecAnimacio(tocat); 
               let accio = tocat.getAttribute('data-accio');
               
@@ -128,12 +151,16 @@
             }
 
             else if (tocat.classList.contains('pin-ciutat')) {
+              ferBip();
               let nomCiutat = tocat.getAttribute('data-nom');
-              parlar(nomCiutat); // <--- LLEGIM EL NOM EN VEU ALTA!
+              let latCoords = Math.abs(tocat.getAttribute('data-lat')).toFixed(1) + (tocat.getAttribute('data-lat') >= 0 ? ' N' : ' S');
+              let lonCoords = Math.abs(tocat.getAttribute('data-lon')).toFixed(1) + (tocat.getAttribute('data-lon') >= 0 ? ' E' : ' O');
+              
+              parlar(nomCiutat + ". Latitud " + Math.round(tocat.getAttribute('data-lat')) + " graus."); 
               
               window.actualitzarPanellCentral(
                 "📍 " + nomCiutat, 
-                `🌍 Coordenades:\nLat: ${tocat.getAttribute('data-lat')}°\nLon: ${tocat.getAttribute('data-lon')}°\n\n${tocat.getAttribute('data-extra')}`, 
+                `Coordenades:\n[ Lat: ${latCoords}  |  Lon: ${lonCoords} ]\n\n${tocat.getAttribute('data-extra')}`, 
                 tocat.getAttribute('data-img')
               );
               batecAnimacio(tocat);
@@ -141,8 +168,9 @@
             }
 
             else if (tocat.classList.contains('linia-important')) {
+              ferBip();
               let nomLinia = tocat.getAttribute('data-nom');
-              parlar(nomLinia); // <--- LLEGIM LA LÍNIA EN VEU ALTA!
+              parlar(nomLinia); 
 
               window.actualitzarPanellCentral("➖ " + nomLinia, tocat.getAttribute('data-info'), "null");
               let liniaVisual = tocat.liniaVisualAssociada;
@@ -175,8 +203,10 @@
           while (horaActual < 0) { horaActual += 24; diaActual--; }
         }
 
+        // --- CÀLCUL ASTRONÒMIC CORREGIT (Hora de Greenwich real) ---
+        // A les 12:00, Greenwich (0º) ha d'estar de cara al Sol (+X). 
         let terraObj = document.getElementById('esfera-terra-real').object3D;
-        terraObj.rotation.y = horaActual * (15 * Math.PI / 180);
+        terraObj.rotation.y = (horaActual - 12) * (15 * Math.PI / 180);
 
         let angleAny = (diaActual / 365.25) * 2 * Math.PI;
         let inclinacioZ = 23.5 * Math.sin(angleAny); 
@@ -186,16 +216,16 @@
         let diaNormalitzat = ((Math.floor(diaActual) % 365) + 365) % 365;
         let eventActiu = null;
 
-        if (diaNormalitzat >= 363 || diaNormalitzat <= 1) eventActiu = { id: 1, nom: "Equinocci de Primavera", desc: "El Sol cau recte a l'Equador.\nEl dia i la nit duren exactament igual." };
-        else if (diaNormalitzat >= 90 && diaNormalitzat <= 93) eventActiu = { id: 2, nom: "Solstici d'Estiu", desc: "La màxima inclinació del Pol Nord al Sol.\nL'Àrtic té Sol les 24 hores." };
-        else if (diaNormalitzat >= 183 && diaNormalitzat <= 186) eventActiu = { id: 3, nom: "Equinocci de Tardor", desc: "El Sol torna a l'Equador.\nDia i nit en equilibri." };
-        else if (diaNormalitzat >= 273 && diaNormalitzat <= 276) eventActiu = { id: 4, nom: "Solstici d'Hivern", desc: "El Pol Nord s'amaga del Sol.\nNit polar de 24 hores a l'Àrtic." };
+        if (diaNormalitzat >= 363 || diaNormalitzat <= 1) eventActiu = { id: 1, nom: "Equinocci de Primavera", desc: "El Sol cau vertical sobre l'Equador.\nEl dia i la nit duren 12 hores iguals a tot el planeta." };
+        else if (diaNormalitzat >= 90 && diaNormalitzat <= 93) eventActiu = { id: 2, nom: "Solstici d'Estiu", desc: "La màxima inclinació del Pol Nord cap al Sol.\nL'Àrtic té Sol les 24 hores (Sol de mitjanit)." };
+        else if (diaNormalitzat >= 183 && diaNormalitzat <= 186) eventActiu = { id: 3, nom: "Equinocci de Tardor", desc: "El Sol torna a passar verticalment per l'Equador.\nInici de la tardor a l'hemisferi nord." };
+        else if (diaNormalitzat >= 273 && diaNormalitzat <= 276) eventActiu = { id: 4, nom: "Solstici d'Hivern", desc: "El Pol Nord s'amaga completament del Sol.\nDia més curt de l'any a Lleida. Nit àrtica." };
 
         let dataActualObjecte = obtenirDataText(diaActual);
 
         if (eventActiu && eventActiu.id !== ultimEventDisparat) {
           ultimEventDisparat = eventActiu.id;
-          parlar(eventActiu.nom); // El sistema t'avisa en veu alta de l'Equinocci!
+          parlar(eventActiu.nom); 
           window.actualitzarPanellCentral("🌟 " + eventActiu.nom, `Data: ${dataActualObjecte.textComplet}\n\n${eventActiu.desc}`, "null");
           window.afegirAHistorialCentral(`${dataActualObjecte.textCurt} - ${eventActiu.nom}`);
         } else if (!eventActiu) {
@@ -229,11 +259,12 @@
           liniaVis.setAttribute('material', 'shader: flat'); 
           planeta.appendChild(liniaVis);
 
+          // HITBOX INVISIBLE AMB "depthWrite: false" PER NO FORADAR ELS PANELLS!
           const hitbox = document.createElement('a-torus');
           hitbox.classList.add('linia-important');
           hitbox.setAttribute('radius', r + 0.001); 
-          hitbox.setAttribute('radius-tubular', 0.02); 
-          hitbox.setAttribute('material', 'transparent: true; opacity: 0'); 
+          hitbox.setAttribute('radius-tubular', 0.025); // Molt gruixuda perquè s'encerti fàcil
+          hitbox.setAttribute('material', 'transparent: true; opacity: 0.0; depthWrite: false'); 
           hitbox.setAttribute('rotation', rotacio || '90 0 0'); 
           hitbox.setAttribute('position', `0 ${y} 0`); 
           hitbox.setAttribute('data-nom', nom);
@@ -274,7 +305,7 @@
           planeta.appendChild(punt);
         }
 
-        this.afegirMarcador("Lleida", 41.61, 0.61, "red", "Zona temperada Nord.", "lleida.jpg");
+        this.afegirMarcador("Lleida", 41.61, 0.61, "red", "Fixa't a quina distància estem de l'Equador.", "lleida.jpg");
         this.afegirMarcador("Nova York", 40.71, -74.00, "cyan", "Estats Units.", "null");
         this.afegirMarcador("Sydney", -33.86, 151.20, "magenta", "Austràlia.", "null");
       }
@@ -311,7 +342,6 @@
     <a-entity position="0 0.40 -1.2" rotation="-20 0 0">
       <a-plane material="shader: flat; color: #1a1a1a; transparent: true; opacity: 0.95" width="2.6" height="0.6" border-radius="0.05"></a-plane>
       
-      <!-- DATA I HORA: Limitats amb wrap-count i amplades clares perquè no s'escampin -->
       <a-text id="text-dia" value="21 Jun 2026" position="-0.7 0.15 0.01" color="#00FFFF" align="center" width="1.6" wrap-count="15" font="mozillavr"></a-text>
       <a-text id="text-hora" value="12:00" position="0.7 0.15 0.01" color="#FFD700" align="center" width="1.2" wrap-count="10" font="mozillavr"></a-text>
 
@@ -336,11 +366,11 @@
 
     </a-entity>
 
-    <!-- PANELLS LATERALS (Ara amb baseline=top perquè NO es solapin textos) -->
+    <!-- PANELLS LATERALS -->
     <a-entity id="panell-info" position="1.8 1.6 -3.0" rotation="0 -35 0">
       <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.9" width="1.6" height="1.4" border-radius="0.05"></a-plane>
       <a-text id="text-panell" value="Simulador Orbital" position="-0.7 0.60 0.01" baseline="top" color="#F0E68C" width="1.4" wrap-count="22" font="mozillavr"></a-text>
-      <a-text id="text-coords" value="Aquest simulador s'acaba de sincronitzar amb la teva data i hora reals.\n\nActiva la veu! Clica les línies." position="-0.7 0.40 0.01" baseline="top" color="white" width="1.4" wrap-count="35" font="mozillavr"></a-text>
+      <a-text id="text-coords" value="La Terra s'ha sincronitzat amb el dia i l'hora reals.\n\nBusca Lleida o les línies de colors amb el teu làser." position="-0.7 0.40 0.01" baseline="top" color="white" width="1.4" wrap-count="35" font="mozillavr"></a-text>
       <a-image id="imatge-panell" src="" position="0 -0.2 0.02" width="1.2" height="0.6" visible="false"></a-image>
     </a-entity>
 
