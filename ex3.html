@@ -1090,7 +1090,14 @@
       let session = frame.session;
       session.requestAnimationFrame(onXRFrame);
       
-      // De moment, mantenim el planeta viu
+      let canvas = viewer.scene.canvas;
+      let gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      let baseLayer = session.renderState.baseLayer;
+
+      // 1. Connectem el motor gràfic a les lents de les ulleres PICO
+      gl.bindFramebuffer(gl.FRAMEBUFFER, baseLayer.framebuffer);
+
+      // 2. Dibuixem Cesium
       viewer.scene.render();
     }
     
