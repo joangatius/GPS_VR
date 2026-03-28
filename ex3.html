@@ -398,8 +398,21 @@
       navigationHelpButton: false,
       timeline: false,
       animation: false,
-      selectionIndicator: false
+      selectionIndicator: false,
+      
+      // --- NOVES OPCIONS PER A REALITAT MIXTA (AR) ---
+      skyBox: false, // Apaguem les estrelles
+      skyAtmosphere: false, // Apaguem l'halo blau de l'atmosfera exterior
+      contextOptions: {
+        webgl: {
+          alpha: true // Permetem que el motor 3D tingui transparència
+        }
+      }
     });
+
+    // Fem que el color de l'espai buit sigui 100% transparent
+    viewer.scene.backgroundColor = Cesium.Color.TRANSPARENT;
+    viewer.scene.globe.showGroundAtmosphere = false; // Traiem la boira de la superfície
 
     viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(0, 0, 70000000),
