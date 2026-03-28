@@ -2,92 +2,115 @@
 <html lang="ca">
 <head>
   <meta charset="utf-8">
-  <title>Repte 3 VR - Maqueta Interactiva</title>
+  <title>Repte 3 VR - Maqueta i Panell de Dades</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
-    // 1. MOTOR DE FÍSIQUES PER AGAFAR I GIRAR LA TERRA (El que ja teníem)
-    AFRAME.registerComponent('agafa-objectes', {
+    // 1. MOTOR D'INTERACCIÓ (AGAFAR EL PLANETA O LLEGIR XINXETES)
+    AFRAME.registerComponent('control-pico', {
       init: function () {
         let comandament = this.el;
-        let objecteAgafat = null;
+        let planetaAgafat = null;
 
         comandament.addEventListener('triggerdown', function () {
+          // Mirem què està tocant el làser
           let tocats = comandament.components.raycaster.intersectedEls;
-          if (tocats.length > 0 && tocats[0].classList.contains('interactiu')) {
-            objecteAgafat = tocats[0];
-            objecteAgafat.removeAttribute('animation'); // Aturem la rotació automàtica
-            comandament.object3D.attach(objecteAgafat.object3D);
+          
+          if (tocats.length > 0) {
+            let tocat = tocats[0];
+
+            // OPCIÓ A: Hem tocat el PLANETA (El volem agafar i girar)
+            if (tocat.classList.contains('esfera-terra')) {
+              planetaAgafat = tocat;
+              planetaAgafat.removeAttribute('animation'); // Aturem la rotació automàtica
+              comandament.object3D.attach(planetaAgafat.object3D);
+            } 
+            // OPCIÓ B: Hem tocat una XINXETA (Volem veure la info al panell)
+            else if (tocat.classList.contains('pin-ciutat')) {
+              // Extraiem les dades que hem guardat a la xinxeta
+              let nom = tocat.getAttribute('data-nom');
+              let lat = tocat.getAttribute('data-lat');
+              let lon = tocat.getAttribute('data-lon');
+              let extra = tocat.getAttribute('data-extra');
+
+              // Actualitzem el text del panell hologràfic flotant
+              let textPanell = document.getElementById('text-panell');
+              let textCoords = document.getElementById('text-coords');
+              
+              textPanell.setAttribute('value', "📍 " + nom);
+              textCoords.setAttribute('value', `Latitud: ${lat}°\nLongitud: ${lon}°\n\n${extra}`);
+              
+              // Fem una petita animació a la xinxeta per saber que l'hem tocat
+              tocat.setAttribute('scale', '1.5 1.5 1.5');
+              setTimeout(() => { tocat.setAttribute('scale', '1 1 1'); }, 300);
+            }
           }
         });
 
+        // Quan deixem anar el gallet, si teníem el planeta, el deixem flotar
         comandament.addEventListener('triggerup', function () {
-          if (objecteAgafat) {
-            comandament.sceneEl.object3D.attach(objecteAgafat.object3D);
-            objecteAgafat = null;
+          if (planetaAgafat) {
+            comandament.sceneEl.object3D.attach(planetaAgafat.object3D);
+            planetaAgafat = null;
           }
         });
       }
     });
 
-    // 2. EL CONSTRUCTOR DE CIUTATS I LÍNIES (LA MÀGIA MATEMÀTICA)
+    // 2. CONSTRUCTOR MATEMÀTIC DE LÍNIES I CIUTATS
     AFRAME.registerComponent('marcadors-terra', {
       init: function () {
         const planeta = this.el;
-        const R = 0.5; // El radi exacte de la nostra pilota (0.5 metres)
+        const R = 0.5; // Radi del planeta
 
-        // DIBUIXEM L'EQUADOR (Anell groc)
+        // LÍNIES MÉS PRIMES (radius-tubular: 0.001 = 1 mil·límetre)
         const equador = document.createElement('a-torus');
-        equador.setAttribute('radius', R + 0.002); // Un pèl més gran que la bola perquè es vegi per fora
-        equador.setAttribute('radius-tubular', 0.002);
+        equador.setAttribute('radius', R + 0.001); 
+        equador.setAttribute('radius-tubular', 0.001);
         equador.setAttribute('color', 'yellow');
-        equador.setAttribute('rotation', '90 0 0'); // El tombem perquè talli pel mig
+        equador.setAttribute('rotation', '90 0 0'); 
         planeta.appendChild(equador);
 
-        // DIBUIXEM EL MERIDIÀ DE GREENWICH (Anell verd)
         const meridian = document.createElement('a-torus');
-        meridian.setAttribute('radius', R + 0.002);
-        meridian.setAttribute('radius-tubular', 0.002);
+        meridian.setAttribute('radius', R + 0.001);
+        meridian.setAttribute('radius-tubular', 0.001);
         meridian.setAttribute('color', 'lime');
-        meridian.setAttribute('rotation', '0 90 0'); // De dalt a baix
+        meridian.setAttribute('rotation', '0 90 0'); 
         planeta.appendChild(meridian);
 
-        // FUNCIÓ PER CLAVAR XINXETES A LES COORDENADES EXACTES
-        this.afegirMarcador = function(nom, lat, lon, color) {
-          // Passem els graus a radians (Fórmula matemàtica)
+        // FUNCIÓ PER CLAVAR XINXETES
+        this.afegirMarcador = function(nom, lat, lon, color, infoExtra) {
           let latRad = lat * Math.PI / 180;
           let lonRad = lon * Math.PI / 180;
           
-          // Calculem la posició 3D sobre l'esfera
-          // (Es multiplica pel radi perquè quedi enganxat a la superfície)
-          let x = -R * Math.cos(latRad) * Math.sin(lonRad);
-          let y =  R * Math.sin(latRad);
-          let z = -R * Math.cos(latRad) * Math.cos(lonRad);
+          let radiXinxeta = 0.008; // Xinxeta més petita (8 mil·límetres)
+          // Sumem el radi de la xinxeta al radi del planeta perquè NO s'esfonsi
+          let R_exterior = R + radiXinxeta; 
           
-          // Creem la boleta (xinxeta)
+          let x = -R_exterior * Math.cos(latRad) * Math.sin(lonRad);
+          let y =  R_exterior * Math.sin(latRad);
+          let z = -R_exterior * Math.cos(latRad) * Math.cos(lonRad);
+          
           const punt = document.createElement('a-sphere');
-          punt.setAttribute('radius', 0.015); // Molt petitona, d'1.5 centímetres
+          punt.classList.add('pin-ciutat'); // Classe crucial pel làser
+          punt.setAttribute('radius', radiXinxeta);
           punt.setAttribute('color', color);
           punt.setAttribute('position', `${x} ${y} ${z}`);
           
-          // Creem l'etiqueta flotant damunt la xinxeta
-          const text = document.createElement('a-text');
-          text.setAttribute('value', nom);
-          text.setAttribute('align', 'center');
-          text.setAttribute('color', 'white');
-          text.setAttribute('scale', '0.2 0.2 0.2');
-          text.setAttribute('position', '0 0.03 0'); // Flotant 3cm per sobre del punt
-          punt.appendChild(text);
+          // Guardem les dades HTML per quan hi cliquin
+          punt.setAttribute('data-nom', nom);
+          punt.setAttribute('data-lat', lat);
+          punt.setAttribute('data-lon', lon);
+          punt.setAttribute('data-extra', infoExtra);
 
-          // Enganxem la xinxeta al planeta (així quan giri el planeta, gira la ciutat)
           planeta.appendChild(punt);
         }
 
-        // ====== AQUÍ POSAREM TOTES LES CIUTATS DEL JOC ======
-        // Ara mateix en poso dues de prova
-        this.afegirMarcador("Lleida", 41.61, 0.61, "red");
-        this.afegirMarcador("Nova York", 40.71, -74.00, "blue");
-        this.afegirMarcador("Sydney", -33.86, 151.20, "orange");
+        // ====== CIUTATS (Nom, Lat, Lon, Color, Info Extra) ======
+        this.afegirMarcador("Lleida", 41.61, 0.61, "red", "Capital de la Terra Ferma.\nZona Temperada Nord.");
+        this.afegirMarcador("Nova York", 40.71, -74.00, "cyan", "Estats Units.\nMolt a prop del paral·lel de Lleida!");
+        this.afegirMarcador("Sydney", -33.86, 151.20, "orange", "Austràlia.\nZona Temperada Sud.");
+        this.afegirMarcador("Equator City (Quito)", -0.18, -78.47, "magenta", "A l'Equador!\nFixa't que toca la línia groga.");
       }
     });
   </script>
@@ -100,15 +123,15 @@
       <img id="mapa-terra" src="earth.jpg">
     </a-assets>
 
-    <!-- COMANDAMENTS (Amb el raig làser) -->
-    <a-entity laser-controls="hand: left" raycaster="objects: .interactiu; far: 5" agafa-objectes></a-entity>
-    <a-entity laser-controls="hand: right" raycaster="objects: .interactiu; far: 5" agafa-objectes></a-entity>
+    <!-- COMANDAMENTS. Ara filtren què toquen: esfera o xinxeta -->
+    <a-entity laser-controls="hand: left" raycaster="objects: .esfera-terra, .pin-ciutat; far: 5" control-pico></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="objects: .esfera-terra, .pin-ciutat; far: 5" control-pico></a-entity>
 
-    <!-- EL PLANETA -->
-    <!-- Ara inclou el nou component: "marcadors-terra" que executarà la matemàtica automàticament -->
+    <!-- EL PLANETA TERRA -->
+    <!-- Classe canviada a 'esfera-terra' per diferenciar-la de les xinxetes -->
     <a-sphere 
       id="planeta"
-      class="interactiu"
+      class="esfera-terra"
       src="#mapa-terra" 
       marcadors-terra
       radius="0.5" 
@@ -117,13 +140,17 @@
       animation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear">
     </a-sphere>
 
-    <a-text 
-      value="Troba Lleida, Nova York i Sydney!" 
-      position="0 1.9 -1.5" 
-      align="center" 
-      color="#000000"
-      scale="0.5 0.5 0.5">
-    </a-text>
+    <!-- PANELL HOLOGRÀFIC FLOTANT (A la dreta del planeta) -->
+    <a-entity id="panell-info" position="0.8 1.4 -1.5" rotation="0 -15 0">
+      <!-- Fons del cartell fosc transparent -->
+      <a-plane color="#111" opacity="0.8" width="0.8" height="0.5" border-radius="0.05"></a-plane>
+      
+      <!-- Títol de la ciutat -->
+      <a-text id="text-panell" value="Apunta i clica\nuna ciutat" position="-0.35 0.15 0.01" color="#F0E68C" width="1.5" font="mozillavr"></a-text>
+      
+      <!-- Dades i informació -->
+      <a-text id="text-coords" value="Fes servir el làser del teu\ncomandament per tocar\nun punt de colors." position="-0.35 -0.05 0.01" color="white" width="1.2"></a-text>
+    </a-entity>
 
   </a-scene>
 
