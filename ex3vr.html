@@ -2,7 +2,7 @@
 <html lang="ca">
 <head>
   <meta charset="utf-8">
-  <title>Repte 3 VR - Simulador Orbital</title>
+  <title>Repte 3 VR - Simulador Orbital (Data i Temps)</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
@@ -10,12 +10,25 @@
     
     // VARIABLES DEL TEMPS
     let tempsActiu = false;
-    let velocitatTemps = 1; // Multiplicador
-    let diaActual = 0; // De 0 a 365
-    let horaActual = 12; // De 0 a 24
+    let velocitatTemps = 2; // Comença a x2
+    let diaActual = 0; // Dia 0 = 21 de Març
+    let horaActual = 12; 
     let solEncès = true;
 
-    // 1. MOTOR GENERAL D'INTERACCIÓ (Clics, Botons i Moviment)
+    // Funció màgica per convertir els dies en una Data real (ex: "21 Mar 2026")
+    function obtenirDataText(diesAfegits) {
+      let dataBase = new Date(2026, 2, 21); // Mes 2 és Març (comença al 0)
+      dataBase.setDate(dataBase.getDate() + Math.floor(diesAfegits));
+      
+      let dia = dataBase.getDate().toString().padStart(2, '0');
+      let mesos =["Gen", "Feb", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Des"];
+      let mes = mesos[dataBase.getMonth()];
+      let any = dataBase.getFullYear();
+      
+      return `${dia} ${mes} ${any}`;
+    }
+
+    // 1. MOTOR D'INTERACCIÓ (Consola i Objectes)
     AFRAME.registerComponent('control-pico', {
       init: function () {
         this.comandament = this.el;
@@ -32,25 +45,25 @@
           if (tocats.length > 0) {
             let tocat = tocats[0];
 
-            // --- GESTIÓ DELS BOTONS DE LA CONSOLA ---
+            // --- CONSOLA DE COMANDAMENT ---
             if (tocat.classList.contains('boto-vr')) {
-              batecAnimacio(tocat); // Petita vibració visual
+              batecAnimacio(tocat); 
               let accio = tocat.getAttribute('data-accio');
               
               if (accio === 'sol') {
                 solEncès = !solEncès;
                 if (solEncès) {
                   tocat.setAttribute('color', '#FFD700');
-                  document.getElementById('text-btn-sol').setAttribute('value', 'SOL: ON');
+                  document.getElementById('text-btn-sol').setAttribute('value', 'SOL\nON');
                   this.solVisual.setAttribute('visible', 'true');
-                  this.llumSol.setAttribute('intensity', '2.0');
+                  this.llumSol.setAttribute('intensity', '3.0'); // Sol intens!
                   document.getElementById('llum-ambient').setAttribute('intensity', '0.4');
                 } else {
                   tocat.setAttribute('color', '#555');
-                  document.getElementById('text-btn-sol').setAttribute('value', 'SOL: OFF');
+                  document.getElementById('text-btn-sol').setAttribute('value', 'SOL\nOFF');
                   this.solVisual.setAttribute('visible', 'false');
                   this.llumSol.setAttribute('intensity', '0');
-                  document.getElementById('llum-ambient').setAttribute('intensity', '1.2'); // Llum total
+                  document.getElementById('llum-ambient').setAttribute('intensity', '1.2'); 
                 }
               }
               else if (accio === 'play') {
@@ -63,15 +76,19 @@
                   document.getElementById('text-btn-play').setAttribute('value', 'PLAY >');
                 }
               }
-              else if (accio === 'vel') {
-                if (velocitatTemps === 1) velocitatTemps = 5;
-                else if (velocitatTemps === 5) velocitatTemps = 10;
-                else velocitatTemps = 1;
-                document.getElementById('text-btn-vel').setAttribute('value', `VEL: x${velocitatTemps}`);
+              else if (accio === 'vel-menys') {
+                if (velocitatTemps > -12) velocitatTemps -= 2;
+                if (velocitatTemps === 0) velocitatTemps = -2; // Saltem el 0
+                document.getElementById('text-btn-vel').setAttribute('value', `VEL: ${velocitatTemps}x`);
+              }
+              else if (accio === 'vel-mes') {
+                if (velocitatTemps < 12) velocitatTemps += 2;
+                if (velocitatTemps === 0) velocitatTemps = 2; // Saltem el 0
+                document.getElementById('text-btn-vel').setAttribute('value', `VEL: ${velocitatTemps}x`);
               }
             }
 
-            // --- INTERACCIÓ AMB EL MÓN (Només si el temps està PAUSAT) ---
+            // --- MÓN INTERACTIU ---
             else if (!tempsActiu) {
               if (tocat.classList.contains('sol-interactiu') && solEncès) {
                 this.solAgafat = true;
@@ -82,7 +99,7 @@
               }
             }
 
-            // --- LECTURA DE DADES (Funciona sempre) ---
+            // --- LECTURA DADES ---
             if (tocat.classList.contains('pin-ciutat')) {
               actualitzarPanell("📍 " + tocat.getAttribute('data-nom'), `Latitud: ${tocat.getAttribute('data-lat')}°\nLongitud: ${tocat.getAttribute('data-lon')}°\n\n${tocat.getAttribute('data-extra')}`, tocat.getAttribute('data-img'));
               batecAnimacio(tocat);
@@ -105,15 +122,12 @@
           this.solAgafat = false;
         });
 
-        // Funcions auxiliars
         function actualitzarPanell(titol, descripcio, imgUrl) {
           document.getElementById('text-panell').setAttribute('value', titol);
           document.getElementById('text-coords').setAttribute('value', descripcio);
           let imgEl = document.getElementById('imatge-panell');
-          if (imgUrl && imgUrl !== "null") {
-            imgEl.setAttribute('src', imgUrl);
-            imgEl.setAttribute('visible', 'true');
-          } else { imgEl.setAttribute('visible', 'false'); }
+          if (imgUrl && imgUrl !== "null") { imgEl.setAttribute('src', imgUrl); imgEl.setAttribute('visible', 'true'); } 
+          else { imgEl.setAttribute('visible', 'false'); }
         }
         function batecAnimacio(el) {
           el.setAttribute('scale', '1.2 1.2 1.2');
@@ -123,45 +137,40 @@
           if (!ciutatsVisitades.includes(nom)) {
             ciutatsVisitades.push(nom);
             if (ciutatsVisitades.length > 6) ciutatsVisitades.shift();
-            let textLlista = ciutatsVisitades.map((c, i) => `${i+1}. ${c}`).join('\n');
-            document.getElementById('text-historial').setAttribute('value', textLlista);
+            document.getElementById('text-historial').setAttribute('value', ciutatsVisitades.map((c, i) => `${i+1}. ${c}`).join('\n'));
           }
         }
       },
 
-      // BUCLE EXECUTAT 90 COPS PER SEGON (Per moure el Sol i la Terra)
+      // BUCLE EXECUTAT 90 COPS PER SEGON (Per avançar o recular en el temps)
       tick: function (time, timeDelta) {
         
-        // A) SI EL TEMPS ESTÀ ACTIU (Rotació i Translació automàtica)
         if (tempsActiu) {
-          // 1. Avancem el rellotge (timeDelta és en milisegons)
-          horaActual += (timeDelta / 1000) * velocitatTemps * 2; // Factor de velocitat
-          if (horaActual >= 24) {
-            horaActual -= 24;
-            diaActual++;
-            if (diaActual > 365) diaActual = 0;
-          }
+          // 1. Calculem l'avanç (o retrocés!) del temps
+          horaActual += (timeDelta / 1000) * velocitatTemps; 
+          
+          // Rebobinem els dies cap endavant o cap enrere automàticament
+          while (horaActual >= 24) { horaActual -= 24; diaActual++; }
+          while (horaActual < 0) { horaActual += 24; diaActual--; }
 
-          // 2. Rotem la Terra sobre si mateixa (15 graus per hora)
+          // 2. Rotació de la Terra (Girant sobre si mateixa)
           let terraObj = document.getElementById('esfera-terra-real').object3D;
           terraObj.rotation.y = horaActual * (15 * Math.PI / 180);
 
-          // 3. Calculem l'estació de l'any (Declinació del Sol)
-          // Usant el sinus per simular que el sol puja i baixa durant els 365 dies
-          let declinacio = 23.5 * Math.sin((diaActual / 365) * 2 * Math.PI);
-          
+          // 3. Estació de l'any (Sol puja i baixa)
+          let declinacio = 23.5 * Math.sin((diaActual / 365.25) * 2 * Math.PI);
           let radius = 1.2;
           let latRad = declinacio * (Math.PI / 180);
           
-          // El sol sempre el tenim "davant" (Z = positiu), només canvia l'alçada (Y)
+          // 4. POSICIÓ DEL SOL: Ara el posem a l'EIX X (A la teva dreta!)
+          let newX = radius * Math.cos(latRad);
           let newY = radius * Math.sin(latRad);
-          let newZ = radius * Math.cos(latRad);
+          let newZ = 0;
           
-          this.solVisual.object3D.position.set(0, newY, newZ);
-          this.llumSol.object3D.position.set(0, newY, newZ);
+          this.solVisual.object3D.position.set(newX, newY, newZ);
+          this.llumSol.object3D.position.set(newX, newY, newZ);
         }
         
-        // B) SI MOVEM EL SOL MANUALMENT (I el temps està pausat)
         else if (this.solAgafat) {
           let intersects = this.comandament.components.raycaster.intersections;
           let celestHit = intersects.find(i => i.object.el.classList.contains('esfera-celest'));
@@ -169,16 +178,14 @@
           if (celestHit) {
             let localPoint = new THREE.Vector3().copy(celestHit.point);
             this.planetaPare.object3D.worldToLocal(localPoint);
-            
             let radius = 1.2;
             let latRad = Math.asin(localPoint.y / radius); 
             let latDeg = latRad * (180 / Math.PI);
             let lonRad = Math.atan2(localPoint.x, localPoint.z);
-            
             if (latDeg > 23.5) latDeg = 23.5;
             if (latDeg < -23.5) latDeg = -23.5;
-            
             let clampedLatRad = latDeg * (Math.PI / 180);
+            
             let newX = radius * Math.cos(clampedLatRad) * Math.sin(lonRad);
             let newY = radius * Math.sin(clampedLatRad);
             let newZ = radius * Math.cos(clampedLatRad) * Math.cos(lonRad);
@@ -188,8 +195,8 @@
           }
         }
 
-        // C) ACTUALITZEM ELS MARCADORS DE TEXT (Rellotge)
-        document.getElementById('text-dia').setAttribute('value', `DIA: ${Math.floor(diaActual)} / 365`);
+        // ACTUALITZEM ELS MARCADORS DIGITALS (Rellotge i Data)
+        document.getElementById('text-dia').setAttribute('value', obtenirDataText(diaActual));
         
         let hFormat = Math.floor(horaActual).toString().padStart(2, '0');
         let mFormat = Math.floor((horaActual % 1) * 60).toString().padStart(2, '0');
@@ -207,7 +214,6 @@
           let latRad = lat * Math.PI / 180;
           let r = R * Math.cos(latRad); 
           let y = R * Math.sin(latRad); 
-
           const linia = document.createElement('a-torus');
           linia.classList.add('linia-important');
           linia.setAttribute('radius', r + 0.001); 
@@ -240,16 +246,14 @@
           let offsetTextura = -90; 
           let latRad = lat * Math.PI / 180;
           let lonRad = (lon + offsetTextura) * Math.PI / 180; 
-          let radiXinxeta = 0.008; 
-          let R_exterior = R + radiXinxeta; 
-          
+          let R_exterior = R + 0.008; 
           let x = -R_exterior * Math.cos(latRad) * Math.sin(lonRad);
           let y =  R_exterior * Math.sin(latRad);
           let z = -R_exterior * Math.cos(latRad) * Math.cos(lonRad);
           
           const punt = document.createElement('a-sphere');
           punt.classList.add('pin-ciutat'); 
-          punt.setAttribute('radius', radiXinxeta);
+          punt.setAttribute('radius', 0.008);
           punt.setAttribute('color', color);
           punt.setAttribute('position', `${x} ${y} ${z}`);
           punt.setAttribute('data-nom', nom);
@@ -271,7 +275,6 @@
 
   <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
     
-    <!-- Llum ambient adaptada (0.4 permet veure el mapa de nit però fosc) -->
     <a-light id="llum-ambient" type="ambient" color="#FFF" intensity="0.4"></a-light>
 
     <a-assets>
@@ -279,17 +282,14 @@
       <img id="img-lleida" src="lleida.jpg">
     </a-assets>
 
-    <!-- COMANDAMENTS. Afegim .boto-vr al làser -->
     <a-entity laser-controls="hand: left" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu, .esfera-celest, .boto-vr; far: 5" control-pico></a-entity>
     <a-entity laser-controls="hand: right" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu, .esfera-celest, .boto-vr; far: 5" control-pico></a-entity>
 
     <!-- GRUP PRINCIPAL -->
     <a-entity id="grup-planeta" position="0 1.2 -1.5">
-        
-        <!-- Cúpula Invisible (Radi 1.2) -->
         <a-sphere class="esfera-celest" radius="1.2" material="visible: false; side: double"></a-sphere>
 
-        <!-- La Terra que rota! (Li hem posat l'ID esfera-terra-real perquè rodi independent) -->
+        <!-- La Terra gira lliure -->
         <a-entity id="esfera-terra-real">
           <a-sphere 
             class="esfera-terra"
@@ -300,62 +300,68 @@
           </a-sphere>
         </a-entity>
 
-        <!-- EL SOL (Bola Visual) -->
+        <!-- EL SOL (Surt per la dreta a l'Eix X: 1.2, 0, 0) -->
         <a-sphere 
           id="el-sol" 
           class="sol-interactiu" 
           radius="0.08" 
           color="#FFF200" 
           material="shader: flat" 
-          position="0 0 1.2">
+          position="1.2 0 0">
         </a-sphere>
         
-        <!-- LA LLUM DIRECCIONAL DEL SOL (Raigs paral·lels exactes) -->
-        <!-- Està separada visualment de la bola però la programació els mou junts -->
-        <a-light id="llum-direccional" type="directional" color="#FFF4D4" intensity="2.0" position="0 0 1.2" target="#esfera-terra-real"></a-light>
-
+        <!-- LLUM DIRECCIONAL INTENSA -->
+        <a-light id="llum-direccional" type="directional" color="#FFF4D4" intensity="3.0" position="1.2 0 0" target="#esfera-terra-real"></a-light>
     </a-entity>
 
     <!-- ============================================== -->
-    <!-- CONSOLA DE COMANDAMENT (A sota del planeta)    -->
+    <!-- NOVA CONSOLA DE COMANDAMENT (Ben endreçada)    -->
     <!-- ============================================== -->
     <a-entity position="0 0.5 -1.2" rotation="-30 0 0">
       
-      <!-- Fons de la consola -->
-      <a-plane color="#222" opacity="0.9" width="1.2" height="0.4" border-radius="0.05"></a-plane>
+      <a-plane color="#1a1a1a" opacity="0.95" width="1.6" height="0.5" border-radius="0.1"></a-plane>
       
-      <!-- Pantalla Digital -->
-      <a-text id="text-dia" value="DIA: 0 / 365" position="-0.5 0.1 0.01" color="#00FFFF" font="mozillavr"></a-text>
-      <a-text id="text-hora" value="12:00" position="0.1 0.1 0.01" color="#FFD700" scale="1.5 1.5 1.5" font="mozillavr"></a-text>
+      <!-- Fila de dalt: DATA I HORA (Ben espaiats) -->
+      <a-text id="text-dia" value="21 Mar 2026" position="-0.70 0.12 0.01" color="#00FFFF" width="3" font="mozillavr"></a-text>
+      <a-text id="text-hora" value="12:00" position="0.25 0.12 0.01" color="#FFD700" scale="2 2 2" font="mozillavr"></a-text>
 
-      <!-- Botó 1: SOL ON/OFF -->
-      <a-plane class="boto-vr" data-accio="sol" position="-0.4 -0.1 0.01" width="0.3" height="0.1" color="#FFD700">
-        <a-text id="text-btn-sol" value="SOL: ON" position="-0.12 0 0.01" color="black" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
+      <!-- Fila de baix: ELS 5 BOTONS INTERACTIUS -->
+      
+      <!-- [SOL] -->
+      <a-plane class="boto-vr" data-accio="sol" position="-0.55 -0.12 0.01" width="0.25" height="0.15" color="#FFD700" border-radius="0.02">
+        <a-text id="text-btn-sol" value="SOL\nON" align="center" position="0 0 0.01" color="black" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
       </a-plane>
 
-      <!-- Botó 2: PLAY/PAUSE -->
-      <a-plane class="boto-vr" data-accio="play" position="0 -0.1 0.01" width="0.3" height="0.1" color="#1E90FF">
-        <a-text id="text-btn-play" value="PLAY >" position="-0.1 0 0.01" color="white" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
+      <!-- [PAUSA / PLAY] -->
+      <a-plane class="boto-vr" data-accio="play" position="-0.20 -0.12 0.01" width="0.3" height="0.15" color="#1E90FF" border-radius="0.02">
+        <a-text id="text-btn-play" value="PLAY >" align="center" position="0 0 0.01" color="white" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
       </a-plane>
 
-      <!-- Botó 3: VELOCITAT -->
-      <a-plane class="boto-vr" data-accio="vel" position="0.4 -0.1 0.01" width="0.3" height="0.1" color="#FF4500">
-        <a-text id="text-btn-vel" value="VEL: x1" position="-0.12 0 0.01" color="white" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
+      <!-- [ - VEL ] -->
+      <a-plane class="boto-vr" data-accio="vel-menys" position="0.1 -0.12 0.01" width="0.15" height="0.15" color="#FF4500" border-radius="0.02">
+        <a-text value="-" align="center" position="0 0.02 0.01" color="white" scale="1.5 1.5 1.5"></a-text>
+      </a-plane>
+
+      <!-- MOSTRADOR DE VELOCITAT -->
+      <a-text id="text-btn-vel" value="VEL: 2x" align="center" position="0.32 -0.12 0.01" color="white" scale="0.8 0.8 0.8" font="mozillavr"></a-text>
+
+      <!-- [ + VEL ] -->
+      <a-plane class="boto-vr" data-accio="vel-mes" position="0.55 -0.12 0.01" width="0.15" height="0.15" color="#FF4500" border-radius="0.02">
+        <a-text value="+" align="center" position="0 0.02 0.01" color="white" scale="1.5 1.5 1.5"></a-text>
       </a-plane>
 
     </a-entity>
 
-    <!-- 1. PANELL D'INFORMACIÓ LATERAL DRETA -->
+    <!-- PANELLS LATERALS -->
     <a-entity id="panell-info" position="0.9 1.4 -1.5" rotation="0 -20 0">
-      <a-plane color="#111" opacity="0.8" width="0.8" height="0.8"></a-plane>
+      <a-plane color="#111" opacity="0.8" width="0.8" height="0.8" border-radius="0.05"></a-plane>
       <a-text id="text-panell" value="Simulador Orbital" position="-0.35 0.30 0.01" color="#F0E68C" width="1.5" font="mozillavr"></a-text>
       <a-text id="text-coords" value="Toca PLAY a la consola de\nbaix per veure el pas del\ntemps i les estacions." position="-0.35 0.10 0.01" color="white" width="1.2"></a-text>
       <a-image id="imatge-panell" src="" position="0 -0.15 0.02" width="0.7" height="0.4" visible="false"></a-image>
     </a-entity>
 
-    <!-- 2. PANELL D'HISTORIAL LATERAL ESQUERRA -->
     <a-entity id="panell-historial" position="-0.8 1.4 -1.5" rotation="0 20 0">
-      <a-plane color="#111" opacity="0.8" width="0.7" height="0.6"></a-plane>
+      <a-plane color="#111" opacity="0.8" width="0.7" height="0.6" border-radius="0.05"></a-plane>
       <a-text value="Historial de Visites" position="-0.30 0.20 0.01" color="#00FF7F" width="1.4" font="mozillavr"></a-text>
       <a-text id="text-historial" value="Encara no has visitat\ncap ciutat." position="-0.30 0.05 0.01" color="white" width="1.2"></a-text>
     </a-entity>
