@@ -2,18 +2,26 @@
 <html lang="ca">
 <head>
   <meta charset="utf-8">
-  <title>Repte 3 VR - Dia, Nit i Solsticis</title>
+  <title>Repte 3 VR - Simulador Orbital</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
     let ciutatsVisitades =[];
+    
+    // VARIABLES DEL TEMPS
+    let tempsActiu = false;
+    let velocitatTemps = 1; // Multiplicador
+    let diaActual = 0; // De 0 a 365
+    let horaActual = 12; // De 0 a 24
+    let solEncès = true;
 
-    // 1. MOTOR D'INTERACCIÓ AVANÇAT
+    // 1. MOTOR GENERAL D'INTERACCIÓ (Clics, Botons i Moviment)
     AFRAME.registerComponent('control-pico', {
       init: function () {
         this.comandament = this.el;
-        this.planetaPare = document.getElementById('grup-planeta'); // El grup sencer (Terra + Sol)
-        this.sol = document.getElementById('el-sol');
+        this.planetaPare = document.getElementById('grup-planeta');
+        this.solVisual = document.getElementById('el-sol');
+        this.llumSol = document.getElementById('llum-direccional');
         
         this.planetaAgafat = false;
         this.solAgafat = false;
@@ -24,32 +32,64 @@
           if (tocats.length > 0) {
             let tocat = tocats[0];
 
-            // A) HEM TOCAT EL SOL
-            if (tocat.classList.contains('sol-interactiu')) {
-              this.solAgafat = true;
-            } 
-            // B) HEM TOCAT LA TERRA (Agafem el grup sencer perquè no es desmunti res)
-            else if (tocat.classList.contains('esfera-terra')) {
-              this.planetaAgafat = true;
-              this.comandament.object3D.attach(this.planetaPare.object3D);
-            } 
-            // C) HEM TOCAT UNA CIUTAT
-            else if (tocat.classList.contains('pin-ciutat')) {
-              actualitzarPanell(
-                "📍 " + tocat.getAttribute('data-nom'),
-                `Latitud: ${tocat.getAttribute('data-lat')}°\nLongitud: ${tocat.getAttribute('data-lon')}°\n\n${tocat.getAttribute('data-extra')}`,
-                tocat.getAttribute('data-img')
-              );
+            // --- GESTIÓ DELS BOTONS DE LA CONSOLA ---
+            if (tocat.classList.contains('boto-vr')) {
+              batecAnimacio(tocat); // Petita vibració visual
+              let accio = tocat.getAttribute('data-accio');
+              
+              if (accio === 'sol') {
+                solEncès = !solEncès;
+                if (solEncès) {
+                  tocat.setAttribute('color', '#FFD700');
+                  document.getElementById('text-btn-sol').setAttribute('value', 'SOL: ON');
+                  this.solVisual.setAttribute('visible', 'true');
+                  this.llumSol.setAttribute('intensity', '2.0');
+                  document.getElementById('llum-ambient').setAttribute('intensity', '0.4');
+                } else {
+                  tocat.setAttribute('color', '#555');
+                  document.getElementById('text-btn-sol').setAttribute('value', 'SOL: OFF');
+                  this.solVisual.setAttribute('visible', 'false');
+                  this.llumSol.setAttribute('intensity', '0');
+                  document.getElementById('llum-ambient').setAttribute('intensity', '1.2'); // Llum total
+                }
+              }
+              else if (accio === 'play') {
+                tempsActiu = !tempsActiu;
+                if (tempsActiu) {
+                  tocat.setAttribute('color', '#32CD32');
+                  document.getElementById('text-btn-play').setAttribute('value', 'PAUSA ||');
+                } else {
+                  tocat.setAttribute('color', '#1E90FF');
+                  document.getElementById('text-btn-play').setAttribute('value', 'PLAY >');
+                }
+              }
+              else if (accio === 'vel') {
+                if (velocitatTemps === 1) velocitatTemps = 5;
+                else if (velocitatTemps === 5) velocitatTemps = 10;
+                else velocitatTemps = 1;
+                document.getElementById('text-btn-vel').setAttribute('value', `VEL: x${velocitatTemps}`);
+              }
+            }
+
+            // --- INTERACCIÓ AMB EL MÓN (Només si el temps està PAUSAT) ---
+            else if (!tempsActiu) {
+              if (tocat.classList.contains('sol-interactiu') && solEncès) {
+                this.solAgafat = true;
+              } 
+              else if (tocat.classList.contains('esfera-terra')) {
+                this.planetaAgafat = true;
+                this.comandament.object3D.attach(this.planetaPare.object3D);
+              }
+            }
+
+            // --- LECTURA DE DADES (Funciona sempre) ---
+            if (tocat.classList.contains('pin-ciutat')) {
+              actualitzarPanell("📍 " + tocat.getAttribute('data-nom'), `Latitud: ${tocat.getAttribute('data-lat')}°\nLongitud: ${tocat.getAttribute('data-lon')}°\n\n${tocat.getAttribute('data-extra')}`, tocat.getAttribute('data-img'));
               batecAnimacio(tocat);
               afegirAHistorial(tocat.getAttribute('data-nom'));
             }
-            // D) HEM TOCAT UNA LÍNIA
             else if (tocat.classList.contains('linia-important')) {
-              actualitzarPanell(
-                "➖ " + tocat.getAttribute('data-nom'),
-                tocat.getAttribute('data-info'),
-                "null"
-              );
+              actualitzarPanell("➖ " + tocat.getAttribute('data-nom'), tocat.getAttribute('data-info'), "null");
               let colorOriginal = tocat.getAttribute('color');
               tocat.setAttribute('color', 'white');
               setTimeout(() => { tocat.setAttribute('color', colorOriginal); }, 400);
@@ -65,7 +105,7 @@
           this.solAgafat = false;
         });
 
-        // Funcions de Text
+        // Funcions auxiliars
         function actualitzarPanell(titol, descripcio, imgUrl) {
           document.getElementById('text-panell').setAttribute('value', titol);
           document.getElementById('text-coords').setAttribute('value', descripcio);
@@ -73,64 +113,91 @@
           if (imgUrl && imgUrl !== "null") {
             imgEl.setAttribute('src', imgUrl);
             imgEl.setAttribute('visible', 'true');
-          } else {
-            imgEl.setAttribute('visible', 'false'); 
-          }
+          } else { imgEl.setAttribute('visible', 'false'); }
         }
-
-        function batecAnimacio(element) {
-          element.setAttribute('scale', '1.5 1.5 1.5');
-          setTimeout(() => { element.setAttribute('scale', '1 1 1'); }, 300);
+        function batecAnimacio(el) {
+          el.setAttribute('scale', '1.2 1.2 1.2');
+          setTimeout(() => { el.setAttribute('scale', '1 1 1'); }, 200);
         }
-
         function afegirAHistorial(nom) {
           if (!ciutatsVisitades.includes(nom)) {
             ciutatsVisitades.push(nom);
-            if (ciutatsVisitades.length > 6) { ciutatsVisitades.shift(); }
+            if (ciutatsVisitades.length > 6) ciutatsVisitades.shift();
             let textLlista = ciutatsVisitades.map((c, i) => `${i+1}. ${c}`).join('\n');
             document.getElementById('text-historial').setAttribute('value', textLlista);
           }
         }
       },
 
-      // BUCLE DE FÍSIQUES DEL SOL (Executat constantment)
-      tick: function () {
-        if (this.solAgafat) {
-          // Busquem on apunta el làser respecte a la cúpula invisible de la Terra
+      // BUCLE EXECUTAT 90 COPS PER SEGON (Per moure el Sol i la Terra)
+      tick: function (time, timeDelta) {
+        
+        // A) SI EL TEMPS ESTÀ ACTIU (Rotació i Translació automàtica)
+        if (tempsActiu) {
+          // 1. Avancem el rellotge (timeDelta és en milisegons)
+          horaActual += (timeDelta / 1000) * velocitatTemps * 2; // Factor de velocitat
+          if (horaActual >= 24) {
+            horaActual -= 24;
+            diaActual++;
+            if (diaActual > 365) diaActual = 0;
+          }
+
+          // 2. Rotem la Terra sobre si mateixa (15 graus per hora)
+          let terraObj = document.getElementById('esfera-terra-real').object3D;
+          terraObj.rotation.y = horaActual * (15 * Math.PI / 180);
+
+          // 3. Calculem l'estació de l'any (Declinació del Sol)
+          // Usant el sinus per simular que el sol puja i baixa durant els 365 dies
+          let declinacio = 23.5 * Math.sin((diaActual / 365) * 2 * Math.PI);
+          
+          let radius = 1.2;
+          let latRad = declinacio * (Math.PI / 180);
+          
+          // El sol sempre el tenim "davant" (Z = positiu), només canvia l'alçada (Y)
+          let newY = radius * Math.sin(latRad);
+          let newZ = radius * Math.cos(latRad);
+          
+          this.solVisual.object3D.position.set(0, newY, newZ);
+          this.llumSol.object3D.position.set(0, newY, newZ);
+        }
+        
+        // B) SI MOVEM EL SOL MANUALMENT (I el temps està pausat)
+        else if (this.solAgafat) {
           let intersects = this.comandament.components.raycaster.intersections;
           let celestHit = intersects.find(i => i.object.el.classList.contains('esfera-celest'));
           
           if (celestHit) {
-            let puntImpacteGlobal = celestHit.point;
-            
-            // 1. Convertim l'impacte a coordenades relatives del planeta
-            let localPoint = new THREE.Vector3().copy(puntImpacteGlobal);
+            let localPoint = new THREE.Vector3().copy(celestHit.point);
             this.planetaPare.object3D.worldToLocal(localPoint);
             
-            // 2. Calculem la Latitud i Longitud d'aquest punt (Radi = 1.2)
             let radius = 1.2;
             let latRad = Math.asin(localPoint.y / radius); 
             let latDeg = latRad * (180 / Math.PI);
             let lonRad = Math.atan2(localPoint.x, localPoint.z);
             
-            // 3. LA MÀGIA DELS TRÒPICS: Restringim la Latitud del Sol entre -23.5 i 23.5
             if (latDeg > 23.5) latDeg = 23.5;
             if (latDeg < -23.5) latDeg = -23.5;
             
-            // 4. Tornem a calcular la posició exacta en 3D amb la latitud bloquejada
             let clampedLatRad = latDeg * (Math.PI / 180);
             let newX = radius * Math.cos(clampedLatRad) * Math.sin(lonRad);
             let newY = radius * Math.sin(clampedLatRad);
             let newZ = radius * Math.cos(clampedLatRad) * Math.cos(lonRad);
             
-            // 5. Movem el Sol allà
-            this.sol.object3D.position.set(newX, newY, newZ);
+            this.solVisual.object3D.position.set(newX, newY, newZ);
+            this.llumSol.object3D.position.set(newX, newY, newZ);
           }
         }
+
+        // C) ACTUALITZEM ELS MARCADORS DE TEXT (Rellotge)
+        document.getElementById('text-dia').setAttribute('value', `DIA: ${Math.floor(diaActual)} / 365`);
+        
+        let hFormat = Math.floor(horaActual).toString().padStart(2, '0');
+        let mFormat = Math.floor((horaActual % 1) * 60).toString().padStart(2, '0');
+        document.getElementById('text-hora').setAttribute('value', `${hFormat}:${mFormat}`);
       }
     });
 
-    // 2. CONSTRUCTOR MATEMÀTIC (Línies i Ciutats)
+    // 2. CONSTRUCTOR MATEMÀTIC
     AFRAME.registerComponent('marcadors-terra', {
       init: function () {
         const planeta = this.el;
@@ -154,15 +221,15 @@
         }
 
         afegirLinia("Equador", "Latitud 0°.\nDivideix la Terra en Nord i Sud.", 0, "yellow");
-        afegirLinia("Tròpic de Càncer", "Latitud 23.5° Nord.\nEl límit exacte on pots pujar el Sol.", 23.5, "orange");
-        afegirLinia("Tròpic de Capricorn", "Latitud -23.5° Sud.\nEl límit exacte on pots baixar el Sol.", -23.5, "orange");
-        afegirLinia("Cercle Polar Àrtic", "Latitud 66.5° Nord.\nZona d'il·luminació total a l'estiu.", 66.5, "cyan");
-        afegirLinia("Cercle Polar Antàrtic", "Latitud -66.5° Sud.\nZona de foscor total a l'estiu nord.", -66.5, "cyan");
+        afegirLinia("Tròpic de Càncer", "Latitud 23.5° N.\nLímit on el Sol arriba vertical a l'estiu.", 23.5, "orange");
+        afegirLinia("Tròpic de Capricorn", "Latitud -23.5° S.\nLímit on el Sol arriba vertical a l'hivern.", -23.5, "orange");
+        afegirLinia("Cercle Polar Àrtic", "Latitud 66.5° N.\nZona de sol de mitjanit o nit polar.", 66.5, "cyan");
+        afegirLinia("Cercle Polar Antàrtic", "Latitud -66.5° S.\nZona de sol de mitjanit o nit polar.", -66.5, "cyan");
 
         const meridian = document.createElement('a-torus');
         meridian.classList.add('linia-important');
         meridian.setAttribute('radius', R + 0.001);
-        meridian.setAttribute('radius-tubular', 0.002); // Més gruixut perquè es vegi bé
+        meridian.setAttribute('radius-tubular', 0.002); 
         meridian.setAttribute('color', 'lime');
         meridian.setAttribute('rotation', '0 90 0'); 
         meridian.setAttribute('data-nom', "Meridià de Greenwich");
@@ -204,35 +271,36 @@
 
   <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
     
-    <!-- LLUM: Nit molt fosca (0.15) -->
-    <a-light type="ambient" color="#333" intensity="0.15"></a-light>
+    <!-- Llum ambient adaptada (0.4 permet veure el mapa de nit però fosc) -->
+    <a-light id="llum-ambient" type="ambient" color="#FFF" intensity="0.4"></a-light>
 
     <a-assets>
       <img id="mapa-terra" src="earth.jpg">
       <img id="img-lleida" src="lleida.jpg">
     </a-assets>
 
-    <!-- COMANDAMENTS. El làser ara busca la cúpula celeste també -->
-    <a-entity laser-controls="hand: left" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu, .esfera-celest; far: 5" control-pico></a-entity>
-    <a-entity laser-controls="hand: right" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu, .esfera-celest; far: 5" control-pico></a-entity>
+    <!-- COMANDAMENTS. Afegim .boto-vr al làser -->
+    <a-entity laser-controls="hand: left" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu, .esfera-celest, .boto-vr; far: 5" control-pico></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu, .esfera-celest, .boto-vr; far: 5" control-pico></a-entity>
 
-    <!-- EL GRUP SENCER (Terra + Sol + Cúpula) -->
-    <!-- Quan atrapes la Terra amb el làser, bellugues aquest bloc sencer -->
+    <!-- GRUP PRINCIPAL -->
     <a-entity id="grup-planeta" position="0 1.2 -1.5">
         
-        <!-- La Terra -->
-        <a-sphere 
-          class="esfera-terra"
-          src="#mapa-terra" 
-          marcadors-terra
-          radius="0.5" 
-          material="shader: standard; roughness: 1.0; metalness: 0.0;">
-        </a-sphere>
-
-        <!-- Cúpula Invisible del Sistema Solar (Serveix per detectar el làser quan movem el sol) -->
+        <!-- Cúpula Invisible (Radi 1.2) -->
         <a-sphere class="esfera-celest" radius="1.2" material="visible: false; side: double"></a-sphere>
 
-        <!-- El Sol (Lligat al grup) -->
+        <!-- La Terra que rota! (Li hem posat l'ID esfera-terra-real perquè rodi independent) -->
+        <a-entity id="esfera-terra-real">
+          <a-sphere 
+            class="esfera-terra"
+            src="#mapa-terra" 
+            marcadors-terra
+            radius="0.5" 
+            material="shader: standard; roughness: 1.0; metalness: 0.0;">
+          </a-sphere>
+        </a-entity>
+
+        <!-- EL SOL (Bola Visual) -->
         <a-sphere 
           id="el-sol" 
           class="sol-interactiu" 
@@ -240,24 +308,54 @@
           color="#FFF200" 
           material="shader: flat" 
           position="0 0 1.2">
-          
-          <!-- Llum Molt Potent pel Dia (6.0) -->
-          <a-light type="point" color="#FFFFFF" intensity="6.0" distance="15"></a-light>
         </a-sphere>
+        
+        <!-- LA LLUM DIRECCIONAL DEL SOL (Raigs paral·lels exactes) -->
+        <!-- Està separada visualment de la bola però la programació els mou junts -->
+        <a-light id="llum-direccional" type="directional" color="#FFF4D4" intensity="2.0" position="0 0 1.2" target="#esfera-terra-real"></a-light>
 
     </a-entity>
 
-    <!-- 1. PANELL D'INFORMACIÓ -->
+    <!-- ============================================== -->
+    <!-- CONSOLA DE COMANDAMENT (A sota del planeta)    -->
+    <!-- ============================================== -->
+    <a-entity position="0 0.5 -1.2" rotation="-30 0 0">
+      
+      <!-- Fons de la consola -->
+      <a-plane color="#222" opacity="0.9" width="1.2" height="0.4" border-radius="0.05"></a-plane>
+      
+      <!-- Pantalla Digital -->
+      <a-text id="text-dia" value="DIA: 0 / 365" position="-0.5 0.1 0.01" color="#00FFFF" font="mozillavr"></a-text>
+      <a-text id="text-hora" value="12:00" position="0.1 0.1 0.01" color="#FFD700" scale="1.5 1.5 1.5" font="mozillavr"></a-text>
+
+      <!-- Botó 1: SOL ON/OFF -->
+      <a-plane class="boto-vr" data-accio="sol" position="-0.4 -0.1 0.01" width="0.3" height="0.1" color="#FFD700">
+        <a-text id="text-btn-sol" value="SOL: ON" position="-0.12 0 0.01" color="black" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
+      </a-plane>
+
+      <!-- Botó 2: PLAY/PAUSE -->
+      <a-plane class="boto-vr" data-accio="play" position="0 -0.1 0.01" width="0.3" height="0.1" color="#1E90FF">
+        <a-text id="text-btn-play" value="PLAY >" position="-0.1 0 0.01" color="white" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
+      </a-plane>
+
+      <!-- Botó 3: VELOCITAT -->
+      <a-plane class="boto-vr" data-accio="vel" position="0.4 -0.1 0.01" width="0.3" height="0.1" color="#FF4500">
+        <a-text id="text-btn-vel" value="VEL: x1" position="-0.12 0 0.01" color="white" scale="0.6 0.6 0.6" font="mozillavr"></a-text>
+      </a-plane>
+
+    </a-entity>
+
+    <!-- 1. PANELL D'INFORMACIÓ LATERAL DRETA -->
     <a-entity id="panell-info" position="0.9 1.4 -1.5" rotation="0 -20 0">
-      <a-plane color="#111" opacity="0.8" width="0.8" height="0.8" border-radius="0.05"></a-plane>
-      <a-text id="text-panell" value="Sistema Solar Actiu" position="-0.35 0.30 0.01" color="#F0E68C" width="1.5" font="mozillavr"></a-text>
-      <a-text id="text-coords" value="Agafa el Sol groc i prova\nde pujar-lo o baixar-lo.\n\nNotaràs el límit dels tròpics." position="-0.35 0.10 0.01" color="white" width="1.2"></a-text>
+      <a-plane color="#111" opacity="0.8" width="0.8" height="0.8"></a-plane>
+      <a-text id="text-panell" value="Simulador Orbital" position="-0.35 0.30 0.01" color="#F0E68C" width="1.5" font="mozillavr"></a-text>
+      <a-text id="text-coords" value="Toca PLAY a la consola de\nbaix per veure el pas del\ntemps i les estacions." position="-0.35 0.10 0.01" color="white" width="1.2"></a-text>
       <a-image id="imatge-panell" src="" position="0 -0.15 0.02" width="0.7" height="0.4" visible="false"></a-image>
     </a-entity>
 
-    <!-- 2. PANELL D'HISTORIAL -->
+    <!-- 2. PANELL D'HISTORIAL LATERAL ESQUERRA -->
     <a-entity id="panell-historial" position="-0.8 1.4 -1.5" rotation="0 20 0">
-      <a-plane color="#111" opacity="0.8" width="0.7" height="0.6" border-radius="0.05"></a-plane>
+      <a-plane color="#111" opacity="0.8" width="0.7" height="0.6"></a-plane>
       <a-text value="Historial de Visites" position="-0.30 0.20 0.01" color="#00FF7F" width="1.4" font="mozillavr"></a-text>
       <a-text id="text-historial" value="Encara no has visitat\ncap ciutat." position="-0.30 0.05 0.01" color="white" width="1.2"></a-text>
     </a-entity>
