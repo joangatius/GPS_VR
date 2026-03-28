@@ -8,13 +8,15 @@
   <script>
     let ciutatsVisitades =[];
 
-    // 1. MOTOR D'INTERACCIÓ AVANÇAT (Terra + Sol Orbitant)
+    // 1. MOTOR D'INTERACCIÓ AVANÇAT
     AFRAME.registerComponent('control-pico', {
       init: function () {
         this.comandament = this.el;
-        this.planetaAgafat = null;
-        this.solAgafat = null;
-        this.planeta = document.getElementById('planeta');
+        this.planetaPare = document.getElementById('grup-planeta'); // El grup sencer (Terra + Sol)
+        this.sol = document.getElementById('el-sol');
+        
+        this.planetaAgafat = false;
+        this.solAgafat = false;
 
         this.comandament.addEventListener('triggerdown', (e) => {
           let tocats = this.comandament.components.raycaster.intersectedEls;
@@ -24,16 +26,14 @@
 
             // A) HEM TOCAT EL SOL
             if (tocat.classList.contains('sol-interactiu')) {
-              this.solAgafat = tocat;
-              // Mentre movem el sol, fem que el làser només busqui la "cúpula invisible" per lliscar-hi
-              this.comandament.setAttribute('raycaster', 'objects', '.esfera-celest');
+              this.solAgafat = true;
             } 
-            // B) HEM TOCAT LA TERRA
+            // B) HEM TOCAT LA TERRA (Agafem el grup sencer perquè no es desmunti res)
             else if (tocat.classList.contains('esfera-terra')) {
-              this.planetaAgafat = tocat;
-              this.comandament.object3D.attach(this.planetaAgafat.object3D);
+              this.planetaAgafat = true;
+              this.comandament.object3D.attach(this.planetaPare.object3D);
             } 
-            // C) HEM TOCAT UNA XINXETA (Ciutats)
+            // C) HEM TOCAT UNA CIUTAT
             else if (tocat.classList.contains('pin-ciutat')) {
               actualitzarPanell(
                 "📍 " + tocat.getAttribute('data-nom'),
@@ -43,7 +43,7 @@
               batecAnimacio(tocat);
               afegirAHistorial(tocat.getAttribute('data-nom'));
             }
-            // D) HEM TOCAT UNA LÍNIA (Tròpics, Equador, Greenwich)
+            // D) HEM TOCAT UNA LÍNIA
             else if (tocat.classList.contains('linia-important')) {
               actualitzarPanell(
                 "➖ " + tocat.getAttribute('data-nom'),
@@ -59,14 +59,10 @@
 
         this.comandament.addEventListener('triggerup', (e) => {
           if (this.planetaAgafat) {
-            this.comandament.sceneEl.object3D.attach(this.planetaAgafat.object3D);
-            this.planetaAgafat = null;
+            this.comandament.sceneEl.object3D.attach(this.planetaPare.object3D);
+            this.planetaAgafat = false;
           }
-          if (this.solAgafat) {
-            this.solAgafat = null;
-            // Retornem el làser a la normalitat
-            this.comandament.setAttribute('raycaster', 'objects', '.esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu');
-          }
+          this.solAgafat = false;
         });
 
         // Funcions de Text
@@ -97,43 +93,44 @@
         }
       },
 
-      // AQUEST BUCLE S'EXECUTA 90 COPS PER SEGON (Per calcular l'òrbita del Sol)
+      // BUCLE DE FÍSIQUES DEL SOL (Executat constantment)
       tick: function () {
         if (this.solAgafat) {
-          let intersections = this.comandament.components.raycaster.intersections;
-          if (intersections.length > 0) {
-            let puntImpacte = intersections[0].point; // Punt global on apunta el làser
+          // Busquem on apunta el làser respecte a la cúpula invisible de la Terra
+          let intersects = this.comandament.components.raycaster.intersections;
+          let celestHit = intersects.find(i => i.object.el.classList.contains('esfera-celest'));
+          
+          if (celestHit) {
+            let puntImpacteGlobal = celestHit.point;
             
-            // 1. Convertim el punt a l'eix relatiu de la Terra
-            let puntLocal = new THREE.Vector3().copy(puntImpacte);
-            this.planeta.object3D.worldToLocal(puntLocal);
-
-            // 2. MATEMÀTICA DELS TRÒPICS: Calculem l'alçada màxima permesa (23.5 graus)
-            let R_orbit = 1.2; // Distància del Sol a la Terra
-            let maxY = R_orbit * Math.sin(23.5 * Math.PI / 180); 
-
-            // 3. Bloquegem l'alçada perquè el Sol no pugui passar dels tròpics
-            if (puntLocal.y > maxY) puntLocal.y = maxY;
-            if (puntLocal.y < -maxY) puntLocal.y = -maxY;
-
-            // 4. Corregim la distància (X i Z) perquè el Sol llisqui sobre una esfera perfecta
-            let xzRadius = Math.sqrt(R_orbit * R_orbit - puntLocal.y * puntLocal.y);
-            let currentXz = Math.sqrt(puntLocal.x * puntLocal.x + puntLocal.z * puntLocal.z);
-
-            if (currentXz > 0) {
-               let escala = xzRadius / currentXz;
-               puntLocal.x *= escala;
-               puntLocal.z *= escala;
-            }
-
-            // 5. Apliquem la posició corregida al Sol
-            this.solAgafat.object3D.position.copy(puntLocal);
+            // 1. Convertim l'impacte a coordenades relatives del planeta
+            let localPoint = new THREE.Vector3().copy(puntImpacteGlobal);
+            this.planetaPare.object3D.worldToLocal(localPoint);
+            
+            // 2. Calculem la Latitud i Longitud d'aquest punt (Radi = 1.2)
+            let radius = 1.2;
+            let latRad = Math.asin(localPoint.y / radius); 
+            let latDeg = latRad * (180 / Math.PI);
+            let lonRad = Math.atan2(localPoint.x, localPoint.z);
+            
+            // 3. LA MÀGIA DELS TRÒPICS: Restringim la Latitud del Sol entre -23.5 i 23.5
+            if (latDeg > 23.5) latDeg = 23.5;
+            if (latDeg < -23.5) latDeg = -23.5;
+            
+            // 4. Tornem a calcular la posició exacta en 3D amb la latitud bloquejada
+            let clampedLatRad = latDeg * (Math.PI / 180);
+            let newX = radius * Math.cos(clampedLatRad) * Math.sin(lonRad);
+            let newY = radius * Math.sin(clampedLatRad);
+            let newZ = radius * Math.cos(clampedLatRad) * Math.cos(lonRad);
+            
+            // 5. Movem el Sol allà
+            this.sol.object3D.position.set(newX, newY, newZ);
           }
         }
       }
     });
 
-    // 2. CONSTRUCTOR MATEMÀTIC DE LÍNIES I CIUTATS
+    // 2. CONSTRUCTOR MATEMÀTIC (Línies i Ciutats)
     AFRAME.registerComponent('marcadors-terra', {
       init: function () {
         const planeta = this.el;
@@ -151,29 +148,25 @@
           linia.setAttribute('color', color);
           linia.setAttribute('rotation', rotacio || '90 0 0'); 
           linia.setAttribute('position', `0 ${y} 0`); 
-          
           linia.setAttribute('data-nom', nom);
           linia.setAttribute('data-info', info);
-
           planeta.appendChild(linia);
         }
 
-        // ====== LÍNIES IMPORTANTS ======
         afegirLinia("Equador", "Latitud 0°.\nDivideix la Terra en Nord i Sud.", 0, "yellow");
-        afegirLinia("Tròpic de Càncer", "Latitud 23.5° Nord.\nLímit on el Sol pot caure\ntotalment vertical a l'estiu.", 23.5, "orange");
-        afegirLinia("Tròpic de Capricorn", "Latitud -23.5° Sud.\nLímit sud on el Sol cau\nvertical al desembre.", -23.5, "orange");
-        afegirLinia("Cercle Polar Àrtic", "Latitud 66.5° Nord.\nSi el Sol està al tròpic de Capricorn,\naquí hi ha un dia sencer fosc.", 66.5, "cyan");
-        afegirLinia("Cercle Polar Antàrtic", "Latitud -66.5° Sud.\nZona de nits i dies llargs.", -66.5, "cyan");
+        afegirLinia("Tròpic de Càncer", "Latitud 23.5° Nord.\nEl límit exacte on pots pujar el Sol.", 23.5, "orange");
+        afegirLinia("Tròpic de Capricorn", "Latitud -23.5° Sud.\nEl límit exacte on pots baixar el Sol.", -23.5, "orange");
+        afegirLinia("Cercle Polar Àrtic", "Latitud 66.5° Nord.\nZona d'il·luminació total a l'estiu.", 66.5, "cyan");
+        afegirLinia("Cercle Polar Antàrtic", "Latitud -66.5° Sud.\nZona de foscor total a l'estiu nord.", -66.5, "cyan");
 
-        // Afegim Greenwich com una línia especial (Vertical en lloc d'Horitzontal)
         const meridian = document.createElement('a-torus');
         meridian.classList.add('linia-important');
         meridian.setAttribute('radius', R + 0.001);
-        meridian.setAttribute('radius-tubular', 0.0015);
+        meridian.setAttribute('radius-tubular', 0.002); // Més gruixut perquè es vegi bé
         meridian.setAttribute('color', 'lime');
         meridian.setAttribute('rotation', '0 90 0'); 
         meridian.setAttribute('data-nom', "Meridià de Greenwich");
-        meridian.setAttribute('data-info', "Longitud 0°.\nServeix de referència per als fusos\nhoraris (Est i Oest).");
+        meridian.setAttribute('data-info', "Longitud 0°.\nReferència global de les hores.");
         planeta.appendChild(meridian);
 
         this.afegirMarcador = function(nom, lat, lon, color, infoExtra, imatgeUrl) {
@@ -192,18 +185,15 @@
           punt.setAttribute('radius', radiXinxeta);
           punt.setAttribute('color', color);
           punt.setAttribute('position', `${x} ${y} ${z}`);
-          
           punt.setAttribute('data-nom', nom);
           punt.setAttribute('data-lat', lat);
           punt.setAttribute('data-lon', lon);
           punt.setAttribute('data-extra', infoExtra);
           punt.setAttribute('data-img', imatgeUrl);
-
           planeta.appendChild(punt);
         }
 
-        // ====== CIUTATS ======
-        this.afegirMarcador("Lleida", 41.61, 0.61, "red", "Zona temperada.", "lleida.jpg");
+        this.afegirMarcador("Lleida", 41.61, 0.61, "red", "Zona temperada Nord.", "lleida.jpg");
         this.afegirMarcador("Nova York", 40.71, -74.00, "cyan", "Estats Units.", "null");
         this.afegirMarcador("Sydney", -33.86, 151.20, "magenta", "Austràlia.", "null");
       }
@@ -214,36 +204,35 @@
 
   <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
     
-    <!-- Llum ambient molt suau perquè la meitat de nit quedi a les fosques -->
-    <a-light type="ambient" color="#333" intensity="0.6"></a-light>
+    <!-- LLUM: Nit molt fosca (0.15) -->
+    <a-light type="ambient" color="#333" intensity="0.15"></a-light>
 
     <a-assets>
       <img id="mapa-terra" src="earth.jpg">
       <img id="img-lleida" src="lleida.jpg">
     </a-assets>
 
-    <!-- COMANDAMENTS (Per defecte llegeixen tot menys la cúpula invisible) -->
-    <a-entity laser-controls="hand: left" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu; far: 5" control-pico></a-entity>
-    <a-entity laser-controls="hand: right" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu; far: 5" control-pico></a-entity>
+    <!-- COMANDAMENTS. El làser ara busca la cúpula celeste també -->
+    <a-entity laser-controls="hand: left" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu, .esfera-celest; far: 5" control-pico></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="objects: .esfera-terra, .pin-ciutat, .linia-important, .sol-interactiu, .esfera-celest; far: 5" control-pico></a-entity>
 
-    <!-- EL PLANETA I TOTS ELS SEUS ELEMENTS FILLS -->
-    <!-- (Com que el Sol està a dins d'aquesta etiqueta, si gires la Terra el Sol gira amb ella) -->
-    <!-- He tret l'animació automàtica de gir perquè tingueu control total manualment -->
-    <a-entity id="planeta" position="0 1.2 -1.5">
+    <!-- EL GRUP SENCER (Terra + Sol + Cúpula) -->
+    <!-- Quan atrapes la Terra amb el làser, bellugues aquest bloc sencer -->
+    <a-entity id="grup-planeta" position="0 1.2 -1.5">
         
-        <!-- Cúpula invisible on rellisca el Sol (Radi 1.2m) -->
-        <a-sphere class="esfera-celest" radius="1.2" material="transparent: true; opacity: 0; side: double"></a-sphere>
-
-        <!-- La Terra Física -->
+        <!-- La Terra -->
         <a-sphere 
           class="esfera-terra"
           src="#mapa-terra" 
           marcadors-terra
           radius="0.5" 
-          material="shader: standard; roughness: 0.95; metalness: 0.0;">
+          material="shader: standard; roughness: 1.0; metalness: 0.0;">
         </a-sphere>
 
-        <!-- EL SOL (Radi 1.2 cap a l'eix Z per tenir-lo davant de primeres) -->
+        <!-- Cúpula Invisible del Sistema Solar (Serveix per detectar el làser quan movem el sol) -->
+        <a-sphere class="esfera-celest" radius="1.2" material="visible: false; side: double"></a-sphere>
+
+        <!-- El Sol (Lligat al grup) -->
         <a-sphere 
           id="el-sol" 
           class="sol-interactiu" 
@@ -252,8 +241,8 @@
           material="shader: flat" 
           position="0 0 1.2">
           
-          <!-- Llum Molt Potent per crear un bon contrast dia/nit -->
-          <a-light type="point" color="#FFFFFF" intensity="3.5" distance="10"></a-light>
+          <!-- Llum Molt Potent pel Dia (6.0) -->
+          <a-light type="point" color="#FFFFFF" intensity="6.0" distance="15"></a-light>
         </a-sphere>
 
     </a-entity>
@@ -261,8 +250,8 @@
     <!-- 1. PANELL D'INFORMACIÓ -->
     <a-entity id="panell-info" position="0.9 1.4 -1.5" rotation="0 -20 0">
       <a-plane color="#111" opacity="0.8" width="0.8" height="0.8" border-radius="0.05"></a-plane>
-      <a-text id="text-panell" value="Benvingut al món" position="-0.35 0.30 0.01" color="#F0E68C" width="1.5" font="mozillavr"></a-text>
-      <a-text id="text-coords" value="Apunta i clica als\nelements per descobrir." position="-0.35 0.10 0.01" color="white" width="1.2"></a-text>
+      <a-text id="text-panell" value="Sistema Solar Actiu" position="-0.35 0.30 0.01" color="#F0E68C" width="1.5" font="mozillavr"></a-text>
+      <a-text id="text-coords" value="Agafa el Sol groc i prova\nde pujar-lo o baixar-lo.\n\nNotaràs el límit dels tròpics." position="-0.35 0.10 0.01" color="white" width="1.2"></a-text>
       <a-image id="imatge-panell" src="" position="0 -0.15 0.02" width="0.7" height="0.4" visible="false"></a-image>
     </a-entity>
 
