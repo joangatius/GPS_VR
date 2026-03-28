@@ -2,22 +2,42 @@
 <html lang="ca">
 <head>
   <meta charset="utf-8">
-  <title>Repte 3 VR - Simulador Astronòmic Corregit</title>
+  <title>Repte 3 VR - Simulador Temps Real i Veu</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
     let ciutatsVisitades =[];
     
+    // --- LECTURA DE LA DATA I HORA REALS ---
+    let dataSistema = new Date();
+    let dataEquinocci = new Date(dataSistema.getFullYear(), 2, 21); // 21 de Març de l'any actual
+    
     // VARIABLES DEL TEMPS
     let tempsActiu = false;
-    let velocitatTemps = 5; 
-    let diaActual = 92; // 21 de Juny
-    let horaActual = 12; 
+    let velocitatsPermeses =[-50, -25, -10, -5, -2, -1, 1, 2, 5, 10, 25, 50];
+    let indexVelocitat = 6; // Posició de l'1x a la llista
+    let velocitatTemps = velocitatsPermeses[indexVelocitat]; 
+    
+    // Calculem la diferència exacta de dies entre avui i l'últim 21 de Març
+    let diaActual = (dataSistema - dataEquinocci) / (1000 * 60 * 60 * 24); 
+    let horaActual = dataSistema.getHours() + (dataSistema.getMinutes() / 60); 
+    
     let solEncès = true;
     let ultimEventDisparat = null; 
 
+    // --- MOTOR DE VEU SINTETITZADA (TTS) ---
+    function parlar(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Tallem si ja estava parlant
+        let missatge = new SpeechSynthesisUtterance(text);
+        missatge.lang = 'ca-ES'; // Idioma Català
+        missatge.rate = 1.0;     // Velocitat normal
+        window.speechSynthesis.speak(missatge);
+      }
+    }
+
     function obtenirDataText(diesAfegits) {
-      let dataBase = new Date(2026, 2, 21); 
+      let dataBase = new Date(dataSistema.getFullYear(), 2, 21); 
       dataBase.setDate(dataBase.getDate() + Math.floor(diesAfegits));
       let dia = dataBase.getDate().toString().padStart(2, '0');
       let mesos =["Gen", "Feb", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Des"];
@@ -33,6 +53,7 @@
         this.planetaPare = document.getElementById('grup-planeta');
         this.solVisual = document.getElementById('el-sol');
         this.llumSol = document.getElementById('llum-direccional');
+        this.llumAmbient = document.getElementById('llum-ambient');
         
         this.planetaAgafat = false;
 
@@ -69,14 +90,14 @@
                   tocat.setAttribute('material', 'shader: flat; color: #FFD700');
                   document.getElementById('text-btn-sol').setAttribute('value', 'SOL ON');
                   this.solVisual.setAttribute('visible', 'true');
-                  this.llumSol.setAttribute('intensity', '4.5'); 
-                  document.getElementById('llum-ambient').setAttribute('intensity', '0.15');
+                  this.llumSol.setAttribute('light', 'intensity', 4.5); 
+                  this.llumAmbient.setAttribute('light', 'intensity', 0.15);
                 } else {
                   tocat.setAttribute('material', 'shader: flat; color: #555');
                   document.getElementById('text-btn-sol').setAttribute('value', 'SOL OFF');
                   this.solVisual.setAttribute('visible', 'false');
-                  this.llumSol.setAttribute('intensity', '0');
-                  document.getElementById('llum-ambient').setAttribute('intensity', '1.2'); 
+                  this.llumSol.setAttribute('light', 'intensity', 0);
+                  this.llumAmbient.setAttribute('light', 'intensity', 1.2); 
                 }
               }
               else if (accio === 'play') {
@@ -90,15 +111,13 @@
                 }
               }
               else if (accio === 'vel-menys') {
-                velocitatTemps -= 5;
-                if (velocitatTemps === 0) velocitatTemps = -5; 
-                if (velocitatTemps < -50) velocitatTemps = -50; 
+                if (indexVelocitat > 0) indexVelocitat--;
+                velocitatTemps = velocitatsPermeses[indexVelocitat];
                 document.getElementById('text-btn-vel').setAttribute('value', `${velocitatTemps}x`);
               }
               else if (accio === 'vel-mes') {
-                velocitatTemps += 5;
-                if (velocitatTemps === 0) velocitatTemps = 5; 
-                if (velocitatTemps > 50) velocitatTemps = 50; 
+                if (indexVelocitat < velocitatsPermeses.length - 1) indexVelocitat++;
+                velocitatTemps = velocitatsPermeses[indexVelocitat];
                 document.getElementById('text-btn-vel').setAttribute('value', `${velocitatTemps}x`);
               }
             }
@@ -109,13 +128,23 @@
             }
 
             else if (tocat.classList.contains('pin-ciutat')) {
-              window.actualitzarPanellCentral("📍 " + tocat.getAttribute('data-nom'), `Latitud: ${tocat.getAttribute('data-lat')}°\nLongitud: ${tocat.getAttribute('data-lon')}°\n\n${tocat.getAttribute('data-extra')}`, tocat.getAttribute('data-img'));
+              let nomCiutat = tocat.getAttribute('data-nom');
+              parlar(nomCiutat); // <--- LLEGIM EL NOM EN VEU ALTA!
+              
+              window.actualitzarPanellCentral(
+                "📍 " + nomCiutat, 
+                `🌍 Coordenades:\nLat: ${tocat.getAttribute('data-lat')}°\nLon: ${tocat.getAttribute('data-lon')}°\n\n${tocat.getAttribute('data-extra')}`, 
+                tocat.getAttribute('data-img')
+              );
               batecAnimacio(tocat);
-              window.afegirAHistorialCentral(tocat.getAttribute('data-nom'));
+              window.afegirAHistorialCentral(nomCiutat);
             }
 
             else if (tocat.classList.contains('linia-important')) {
-              window.actualitzarPanellCentral("➖ " + tocat.getAttribute('data-nom'), tocat.getAttribute('data-info'), "null");
+              let nomLinia = tocat.getAttribute('data-nom');
+              parlar(nomLinia); // <--- LLEGIM LA LÍNIA EN VEU ALTA!
+
+              window.actualitzarPanellCentral("➖ " + nomLinia, tocat.getAttribute('data-info'), "null");
               let liniaVisual = tocat.liniaVisualAssociada;
               if (liniaVisual) {
                 let colorOriginal = tocat.colorOriginal;
@@ -153,28 +182,26 @@
         let inclinacioZ = 23.5 * Math.sin(angleAny); 
         document.getElementById('eix-terra').object3D.rotation.z = -inclinacioZ * (Math.PI / 180);
 
-        // --- SISTEMA D'ESDEVENIMENTS ASTRONÒMICS (Ara amb dates reals) ---
+        // --- SISTEMA D'ESDEVENIMENTS ASTRONÒMICS ---
         let diaNormalitzat = ((Math.floor(diaActual) % 365) + 365) % 365;
         let eventActiu = null;
 
-        if (diaNormalitzat >= 363 || diaNormalitzat <= 1) eventActiu = { id: 1, nom: "Equinocci de Primavera", desc: "El Sol cau completament recte a l'Equador.\n\nEl dia i la nit duren exactament igual a tot el planeta." };
-        else if (diaNormalitzat >= 90 && diaNormalitzat <= 93) eventActiu = { id: 2, nom: "Solstici d'Estiu", desc: "La màxima inclinació del Pol Nord cap al Sol.\n\nInici de l'Estiu Boreal. El Cercle Polar Àrtic té Sol les 24 hores." };
-        else if (diaNormalitzat >= 183 && diaNormalitzat <= 186) eventActiu = { id: 3, nom: "Equinocci de Tardor", desc: "El Sol torna a caure vertical a l'Equador.\n\nEl dia i la nit tornen a durar igual." };
-        else if (diaNormalitzat >= 273 && diaNormalitzat <= 276) eventActiu = { id: 4, nom: "Solstici d'Hivern", desc: "El Pol Nord s'amaga completament del Sol.\n\nDia més curt a l'Hemisferi Nord. El Pol Nord viu de nit 24 hores." };
+        if (diaNormalitzat >= 363 || diaNormalitzat <= 1) eventActiu = { id: 1, nom: "Equinocci de Primavera", desc: "El Sol cau recte a l'Equador.\nEl dia i la nit duren exactament igual." };
+        else if (diaNormalitzat >= 90 && diaNormalitzat <= 93) eventActiu = { id: 2, nom: "Solstici d'Estiu", desc: "La màxima inclinació del Pol Nord al Sol.\nL'Àrtic té Sol les 24 hores." };
+        else if (diaNormalitzat >= 183 && diaNormalitzat <= 186) eventActiu = { id: 3, nom: "Equinocci de Tardor", desc: "El Sol torna a l'Equador.\nDia i nit en equilibri." };
+        else if (diaNormalitzat >= 273 && diaNormalitzat <= 276) eventActiu = { id: 4, nom: "Solstici d'Hivern", desc: "El Pol Nord s'amaga del Sol.\nNit polar de 24 hores a l'Àrtic." };
 
         let dataActualObjecte = obtenirDataText(diaActual);
 
         if (eventActiu && eventActiu.id !== ultimEventDisparat) {
           ultimEventDisparat = eventActiu.id;
+          parlar(eventActiu.nom); // El sistema t'avisa en veu alta de l'Equinocci!
           window.actualitzarPanellCentral("🌟 " + eventActiu.nom, `Data: ${dataActualObjecte.textComplet}\n\n${eventActiu.desc}`, "null");
-          
-          // Afegim l'event a l'historial junt amb la data curta
           window.afegirAHistorialCentral(`${dataActualObjecte.textCurt} - ${eventActiu.nom}`);
         } else if (!eventActiu) {
           ultimEventDisparat = null;
         }
 
-        // Rellotges Digitals
         document.getElementById('text-dia').setAttribute('value', dataActualObjecte.textComplet);
         let hFormat = Math.floor(Math.abs(horaActual)).toString().padStart(2, '0');
         let mFormat = Math.floor((Math.abs(horaActual) % 1) * 60).toString().padStart(2, '0');
@@ -280,67 +307,47 @@
         <a-light id="llum-direccional" type="directional" color="#FFF4D4" intensity="4.5" position="1.5 0 0" target="#objectiu-llum"></a-light>
     </a-entity>
 
-    <!-- ============================================== -->
-    <!-- CONSOLA CENTRAL (Corregida completament)       -->
-    <!-- ============================================== -->
+    <!-- CONSOLA CENTRAL -->
     <a-entity position="0 0.40 -1.2" rotation="-20 0 0">
-      
-      <!-- Fons pla autoluminós -->
       <a-plane material="shader: flat; color: #1a1a1a; transparent: true; opacity: 0.95" width="2.6" height="0.6" border-radius="0.05"></a-plane>
       
-      <!-- DATA I HORA: Amb align=center i wrap-count ben controlat -->
+      <!-- DATA I HORA: Limitats amb wrap-count i amplades clares perquè no s'escampin -->
       <a-text id="text-dia" value="21 Jun 2026" position="-0.7 0.15 0.01" color="#00FFFF" align="center" width="1.6" wrap-count="15" font="mozillavr"></a-text>
       <a-text id="text-hora" value="12:00" position="0.7 0.15 0.01" color="#FFD700" align="center" width="1.2" wrap-count="10" font="mozillavr"></a-text>
 
       <!-- BOTONS INFERIORS -->
-      <!-- [ SOL ] -->
       <a-plane class="boto-vr" data-accio="sol" material="shader: flat; color: #FFD700" position="-0.8 -0.15 0.01" width="0.4" height="0.18" border-radius="0.02">
         <a-text id="text-btn-sol" value="SOL ON" align="center" position="0 0 0.01" color="black" width="0.3" wrap-count="8" font="mozillavr"></a-text>
       </a-plane>
 
-      <!--[ PLAY ] -->
       <a-plane class="boto-vr" data-accio="play" material="shader: flat; color: #1E90FF" position="-0.3 -0.15 0.01" width="0.4" height="0.18" border-radius="0.02">
         <a-text id="text-btn-play" value="PLAY >" align="center" position="0 0 0.01" color="white" width="0.3" wrap-count="8" font="mozillavr"></a-text>
       </a-plane>
 
-      <!-- [ - ] -->
       <a-plane class="boto-vr" data-accio="vel-menys" material="shader: flat; color: #FF4500" position="0.25 -0.15 0.01" width="0.2" height="0.18" border-radius="0.02">
         <a-text value="-" align="center" position="0 0.01 0.01" color="white" width="0.15" wrap-count="3" font="mozillavr"></a-text>
       </a-plane>
 
-      <!-- TEXT VELOCITAT -->
-      <a-text id="text-btn-vel" value="5x" align="center" position="0.55 -0.15 0.01" color="white" width="0.8" wrap-count="5" font="mozillavr"></a-text>
+      <a-text id="text-btn-vel" value="1x" align="center" position="0.55 -0.15 0.01" color="white" width="0.8" wrap-count="5" font="mozillavr"></a-text>
 
-      <!-- [ + ] -->
       <a-plane class="boto-vr" data-accio="vel-mes" material="shader: flat; color: #FF4500" position="0.85 -0.15 0.01" width="0.2" height="0.18" border-radius="0.02">
         <a-text value="+" align="center" position="0 0.01 0.01" color="white" width="0.15" wrap-count="3" font="mozillavr"></a-text>
       </a-plane>
 
     </a-entity>
 
-    <!-- ============================================== -->
-    <!-- PANELLS LATERALS (Més grans i text més petit)  -->
-    <!-- ============================================== -->
+    <!-- PANELLS LATERALS (Ara amb baseline=top perquè NO es solapin textos) -->
     <a-entity id="panell-info" position="1.8 1.6 -3.0" rotation="0 -35 0">
-      <!-- Fons molt més gran (1.6m x 1.4m) -->
       <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.9" width="1.6" height="1.4" border-radius="0.05"></a-plane>
-      
-      <!-- Títol: align=left començant al marge esquerre (-0.7) -->
-      <a-text id="text-panell" value="Simulador Orbital" position="-0.7 0.55 0.01" color="#F0E68C" width="1.4" wrap-count="22" font="mozillavr"></a-text>
-      
-      <!-- Cos de text: wrap-count alt (35) perquè la lletra sigui petita -->
-      <a-text id="text-coords" value="La Terra inclina el seu eix respecte al Sol creant les estacions.\n\nFes anar el temps ràpid a la consola de baix per veure els solsticis." position="-0.7 0.35 0.01" color="white" width="1.4" wrap-count="35" font="mozillavr"></a-text>
-      
-      <!-- Imatge centrada a sota -->
+      <a-text id="text-panell" value="Simulador Orbital" position="-0.7 0.60 0.01" baseline="top" color="#F0E68C" width="1.4" wrap-count="22" font="mozillavr"></a-text>
+      <a-text id="text-coords" value="Aquest simulador s'acaba de sincronitzar amb la teva data i hora reals.\n\nActiva la veu! Clica les línies." position="-0.7 0.40 0.01" baseline="top" color="white" width="1.4" wrap-count="35" font="mozillavr"></a-text>
       <a-image id="imatge-panell" src="" position="0 -0.2 0.02" width="1.2" height="0.6" visible="false"></a-image>
     </a-entity>
 
     <a-entity id="panell-historial" position="-1.8 1.6 -3.0" rotation="0 35 0">
       <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.9" width="1.6" height="1.4" border-radius="0.05"></a-plane>
-      <a-text value="Historial d'Esdeveniments" position="-0.7 0.55 0.01" color="#00FF7F" width="1.4" wrap-count="25" font="mozillavr"></a-text>
-      
-      <!-- Llista de l'historial (wrap-count alt per cabre-hi bé) -->
-      <a-text id="text-historial" value="Encara no hi ha dades." position="-0.7 0.35 0.01" color="white" width="1.4" wrap-count="40" font="mozillavr"></a-text>
+      <a-text value="Historial d'Esdeveniments" position="-0.7 0.60 0.01" baseline="top" color="#00FF7F" width="1.4" wrap-count="25" font="mozillavr"></a-text>
+      <a-text id="text-historial" value="Encara no hi ha dades." position="-0.7 0.40 0.01" baseline="top" color="white" width="1.4" wrap-count="40" font="mozillavr"></a-text>
     </a-entity>
 
   </a-scene>
