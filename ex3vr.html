@@ -6,7 +6,6 @@
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
-    // Variable global per guardar la llista de ciutats visitades
     let ciutatsVisitades =[];
 
     // 1. MOTOR D'INTERACCIÓ
@@ -39,27 +38,21 @@
               
               let imgEl = document.getElementById('imatge-panell');
               if (imatgeUrl && imatgeUrl !== "null") {
+                // Carreguem la imatge local del GitHub
                 imgEl.setAttribute('src', imatgeUrl);
                 imgEl.setAttribute('visible', 'true');
               } else {
-                imgEl.setAttribute('visible', 'false'); // Amaguem la foto si no en té
+                imgEl.setAttribute('visible', 'false'); 
               }
               
-              // Animació de la xinxeta
               tocat.setAttribute('scale', '1.5 1.5 1.5');
               setTimeout(() => { tocat.setAttribute('scale', '1 1 1'); }, 300);
 
               // B) ACTUALITZEM L'HISTORIAL (ESQUERRA)
-              // Si no la teníem a la llista, l'afegim
               if (!ciutatsVisitades.includes(nom)) {
                 ciutatsVisitades.push(`${nom} (${lat}, ${lon})`);
+                if (ciutatsVisitades.length > 6) { ciutatsVisitades.shift(); }
                 
-                // Limitem la llista a les últimes 6 perquè no surti del cartell
-                if (ciutatsVisitades.length > 6) {
-                  ciutatsVisitades.shift(); 
-                }
-                
-                // Actualitzem el text del quadern de bitàcola
                 let textLlista = ciutatsVisitades.map((c, i) => `${i+1}. ${c}`).join('\n');
                 document.getElementById('text-historial').setAttribute('value', textLlista);
               }
@@ -76,7 +69,7 @@
       }
     });
 
-    // 2. CONSTRUCTOR MATEMÀTIC DE LÍNIES I CIUTATS
+    // 2. CONSTRUCTOR MATEMÀTIC
     AFRAME.registerComponent('marcadors-terra', {
       init: function () {
         const planeta = this.el;
@@ -98,8 +91,8 @@
         planeta.appendChild(meridian);
 
         this.afegirMarcador = function(nom, lat, lon, color, infoExtra, imatgeUrl) {
-          // CORRECCIÓ DEL DESFASAMENT DEL MAPA VISUAL (Sumem 90 graus)
-          let offsetTextura = 90; 
+          // CORRECCIÓ DEL DESFASAMENT: Ara restem 90 graus perquè vagi a l'oest!
+          let offsetTextura = -90; 
           let latRad = lat * Math.PI / 180;
           let lonRad = (lon + offsetTextura) * Math.PI / 180; 
           
@@ -120,17 +113,16 @@
           punt.setAttribute('data-lat', lat);
           punt.setAttribute('data-lon', lon);
           punt.setAttribute('data-extra', infoExtra);
-          punt.setAttribute('data-img', imatgeUrl || "null");
+          punt.setAttribute('data-img', imatgeUrl);
 
           planeta.appendChild(punt);
         }
 
-        // ====== CIUTATS (Ara amb enllaços a imatges!) ======
-        this.afegirMarcador("Lleida", 41.61, 0.61, "red", "Capital de la Terra Ferma.", "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Lleida_-_Seu_Vella.jpg/640px-Lleida_-_Seu_Vella.jpg");
-        
-        this.afegirMarcador("Nova York", 40.71, -74.00, "cyan", "Estats Units.", "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/New_york_times_square-terabass.jpg/640px-New_york_times_square-terabass.jpg");
-        
-        this.afegirMarcador("Sydney", -33.86, 151.20, "orange", "Austràlia.", "https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Sydney_Opera_House_and_Harbour_Bridge_Dusk_%282%29_2019.jpg/640px-Sydney_Opera_House_and_Harbour_Bridge_Dusk_%282%29_2019.jpg");
+        // ====== CIUTATS ======
+        // Ara Lleida crida directament l'arxiu lleida.jpg que has pujat al teu GitHub!
+        this.afegirMarcador("Lleida", 41.61, 0.61, "red", "Capital de la Terra Ferma.", "lleida.jpg");
+        this.afegirMarcador("Nova York", 40.71, -74.00, "cyan", "Estats Units.", "null");
+        this.afegirMarcador("Sydney", -33.86, 151.20, "orange", "Austràlia.", "null");
       }
     });
   </script>
@@ -141,6 +133,8 @@
     
     <a-assets>
       <img id="mapa-terra" src="earth.jpg">
+      <!-- És recomanable precarregar la imatge aquí perquè vagi ràpid quan cliquin -->
+      <img id="img-lleida" src="lleida.jpg">
     </a-assets>
 
     <!-- COMANDAMENTS -->
@@ -159,17 +153,16 @@
       animation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear">
     </a-sphere>
 
-    <!-- 1. PANELL D'INFORMACIÓ PRINCIPAL (A la DRETA del planeta) -->
-    <!-- L'he fet més alt (0.8) per encabir-hi la foto -->
+    <!-- 1. PANELL D'INFORMACIÓ PRINCIPAL (DRETA) -->
     <a-entity id="panell-info" position="0.8 1.4 -1.5" rotation="0 -15 0">
       <a-plane color="#111" opacity="0.8" width="0.8" height="0.8" border-radius="0.05"></a-plane>
       <a-text id="text-panell" value="Apunta i clica\nuna ciutat" position="-0.35 0.30 0.01" color="#F0E68C" width="1.5" font="mozillavr"></a-text>
       <a-text id="text-coords" value="Fes servir el làser per\ntocar un punt de colors." position="-0.35 0.10 0.01" color="white" width="1.2"></a-text>
-      <!-- REQUADRE PER A LA IMATGE -->
+      <!-- REQUADRE IMATGE -->
       <a-image id="imatge-panell" src="" position="0 -0.15 0.02" width="0.7" height="0.4" visible="false"></a-image>
     </a-entity>
 
-    <!-- 2. PANELL D'HISTORIAL / BITÀCOLA (A l'ESQUERRA del planeta) -->
+    <!-- 2. PANELL D'HISTORIAL (ESQUERRA) -->
     <a-entity id="panell-historial" position="-0.8 1.4 -1.5" rotation="0 15 0">
       <a-plane color="#111" opacity="0.8" width="0.7" height="0.6" border-radius="0.05"></a-plane>
       <a-text value="Historial de Visites" position="-0.30 0.20 0.01" color="#00FF7F" width="1.4" font="mozillavr"></a-text>
