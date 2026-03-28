@@ -2,28 +2,28 @@
 <html lang="ca">
 <head>
   <meta charset="utf-8">
-  <title>Repte 3 VR - Simulador i Dades Alumne</title>
+  <title>Repte 3 VR - Simulador Final i Veu</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
     let ciutatsVisitades =[];
-    
-    // VARIABLES DEL TEMPS
     let dataSistema = new Date();
     let dataEquinocci = new Date(dataSistema.getFullYear(), 2, 21); 
+    
     let tempsActiu = false;
     let velocitatsPermeses =[-50, -30, -10, -5, -2, -1, 1, 2, 5, 10, 30, 50];
     let indexVelocitat = 6; 
     let velocitatTemps = velocitatsPermeses[indexVelocitat]; 
     let diaActual = (dataSistema - dataEquinocci) / (1000 * 60 * 60 * 24); 
     let horaActual = dataSistema.getHours() + (dataSistema.getMinutes() / 60); 
+    
     let solEncès = true;
     let ultimEventDisparat = null; 
     let audioCtx = null;
 
-    // --- CONNEXIÓ AMB GOOGLE APPS SCRIPT ---
-    // IMPORTANT: Posa aquí la teva URL de Google Apps Script!
-    const APPSCRIPT_URL = "https://script.google.com/a/macros/insjoanoro.cat/s/AKfycbzFfZYOpQIbizXiUm0qAm2xR7LZAeT2wrtaE9L95TaTbbe8H7Lalh5nfGMFdNTeSQ1Rmw/exec";
+    // --- 1. CONNEXIÓ GOOGLE APPS SCRIPT (Sense CORS error) ---
+    // POSA AQUÍ LA TEVA NOVA URL (Assegura't que l'Apps Script té accés: "Qualsevol")
+    const APPSCRIPT_URL = "https://script.google.com/macros/s/AKfycbzFfZYOpQIbizXiUm0qAm2xR7LZAeT2wrtaE9L95TaTbbe8H7Lalh5nfGMFdNTeSQ1Rmw/exec";
 
     document.addEventListener("DOMContentLoaded", () => {
       fetch(APPSCRIPT_URL + "?action=getLogo")
@@ -33,14 +33,28 @@
             document.getElementById('logo-institut').setAttribute('src', data.logo);
             document.getElementById('logo-institut').setAttribute('visible', 'true');
           }
-          let email = data.email || "anonym";
+          // El correu arribarà buit si no estan loguejats, posem 'No identificat'
+          let email = (data.email && data.email !== "") ? data.email : "Jugador VR (No identificat)";
           document.getElementById('text-usuari').setAttribute('value', `Alumne: ${email}`);
         })
         .catch(error => {
-          console.error("Error Apps Script:", error);
-          document.getElementById('text-usuari').setAttribute('value', `Alumne: anonym`);
+          console.log("Aquest error és normal si l'Apps Script està restringit:", error);
+          document.getElementById('text-usuari').setAttribute('value', `Alumne: Jugador VR`);
         });
     });
+
+    // --- 2. DESBLOQUEJADOR DE VEU I SO ---
+    let veuDesbloquejada = false;
+    // Aquest esdeveniment caça el clic que fas a l'ordinador o el clic a l'ullera per entrar a AR
+    document.addEventListener('click', () => {
+      if (!veuDesbloquejada && 'speechSynthesis' in window) {
+        let msgSilenci = new SpeechSynthesisUtterance('');
+        msgSilenci.volume = 0; // Mut
+        window.speechSynthesis.speak(msgSilenci);
+        veuDesbloquejada = true;
+        console.log("Motor de veu despertat pel navegador!");
+      }
+    }, { once: true });
 
     function ferBip() {
       if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -56,17 +70,15 @@
       osc.stop(audioCtx.currentTime + 0.1);
     }
 
-    // MOTOR DE VEU (Millorat per forçar qualsevol veu disponible)
-    window.speechSynthesis.onvoiceschanged = function() { window.speechSynthesis.getVoices(); };
     function parlar(text) {
+      if (!veuDesbloquejada) console.warn("La veu no s'ha pogut despertar.");
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel(); 
         let missatge = new SpeechSynthesisUtterance(text);
         let voices = window.speechSynthesis.getVoices();
-        // Intentem Català -> Castellà -> La primera que tingui la ullera
-        let voice = voices.find(v => v.lang.startsWith('ca')) || voices.find(v => v.lang.startsWith('es')) || voices[0];
+        let voice = voices.find(v => v.lang.startsWith('ca')) || voices.find(v => v.lang.startsWith('es'));
         if (voice) missatge.voice = voice;
-        missatge.rate = 1.0;     
+        missatge.lang = voice ? voice.lang : 'ca-ES';
         window.speechSynthesis.speak(missatge);
       }
     }
@@ -81,7 +93,7 @@
       return { textComplet: `${dia} ${mes} ${any}`, textCurt: `${dia} ${mes}` };
     }
 
-    // 1. MOTOR D'INTERACCIÓ
+    // --- 3. MOTOR D'INTERACCIÓ ---
     AFRAME.registerComponent('control-pico', {
       init: function () {
         this.comandament = this.el;
@@ -109,6 +121,7 @@
 
         this.comandament.addEventListener('triggerdown', (e) => {
           let tocats = this.comandament.components.raycaster.intersectedEls;
+          
           if (tocats.length > 0) {
             let tocat = tocats[0];
 
@@ -116,6 +129,7 @@
               ferBip();
               batecAnimacio(tocat); 
               let accio = tocat.getAttribute('data-accio');
+              
               if (accio === 'sol') {
                 solEncès = !solEncès;
                 if (solEncès) {
@@ -163,7 +177,7 @@
               ferBip();
               let nomCiutat = tocat.getAttribute('data-nom');
               let lat = Math.round(tocat.getAttribute('data-lat'));
-              parlar(nomCiutat + ". Latitud " + lat); 
+              parlar(nomCiutat + ". Latitud " + lat + " graus."); 
               
               let latC = Math.abs(tocat.getAttribute('data-lat')).toFixed(1) + (tocat.getAttribute('data-lat') >= 0 ? ' N' : ' S');
               let lonC = Math.abs(tocat.getAttribute('data-lon')).toFixed(1) + (tocat.getAttribute('data-lon') >= 0 ? ' E' : ' O');
@@ -177,6 +191,7 @@
               ferBip();
               let nomLinia = tocat.getAttribute('data-nom');
               parlar(nomLinia); 
+
               window.actualitzarPanellCentral("➖ " + nomLinia, tocat.getAttribute('data-info'), "null");
               let liniaVisual = tocat.liniaVisualAssociada;
               if (liniaVisual) {
@@ -333,8 +348,8 @@
     <!-- CONSOLA CENTRAL -->
     <a-entity position="0 0.40 -1.2" rotation="-20 0 0">
       <a-plane material="shader: flat; color: #1a1a1a; transparent: true; opacity: 0.95" width="2.6" height="0.6" border-radius="0.05"></a-plane>
-      <a-text id="text-dia" value="21 Jun 2026" position="-0.7 0.15 0.01" color="#00FFFF" align="center" width="1.6" wrap-count="15" font="mozillavr"></a-text>
-      <a-text id="text-hora" value="12:00" position="0.7 0.15 0.01" color="#FFD700" align="center" width="1.2" wrap-count="10" font="mozillavr"></a-text>
+      <a-text id="text-dia" value="" position="-0.7 0.15 0.01" color="#00FFFF" align="center" width="1.6" wrap-count="15" font="mozillavr"></a-text>
+      <a-text id="text-hora" value="" position="0.7 0.15 0.01" color="#FFD700" align="center" width="1.2" wrap-count="10" font="mozillavr"></a-text>
 
       <a-plane class="boto-vr" data-accio="sol" material="shader: flat; color: #FFD700" position="-0.8 -0.15 0.01" width="0.4" height="0.18" border-radius="0.02">
         <a-text id="text-btn-sol" value="SOL ON" align="center" position="0 0 0.01" color="black" width="0.3" wrap-count="8" font="mozillavr"></a-text>
@@ -355,17 +370,17 @@
       </a-plane>
     </a-entity>
 
-    <!-- LOGO I CORREU (Sota la consola) -->
+    <!-- LOGO I CORREU -->
     <a-entity position="0 0.0 -1.2" rotation="-20 0 0">
-      <a-image id="logo-institut" src="" position="-0.4 0 0.01" width="0.25" height="0.25" visible="false"></a-image>
-      <a-text id="text-usuari" value="Connectant amb Google..." position="-0.2 0 0.01" baseline="center" color="#00FF7F" width="1.5" wrap-count="30" font="mozillavr"></a-text>
+      <a-image id="logo-institut" src="" position="-0.7 0 0.01" width="0.25" height="0.25" visible="false"></a-image>
+      <a-text id="text-usuari" value="Connectant amb Google..." position="-0.5 0 0.01" baseline="center" color="#00FF7F" width="1.5" wrap-count="30" font="mozillavr"></a-text>
     </a-entity>
 
     <!-- PANELLS LATERALS -->
     <a-entity id="panell-info" position="1.8 1.6 -3.0" rotation="0 -35 0">
       <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.9" width="1.6" height="1.4" border-radius="0.05"></a-plane>
       <a-text id="text-panell" value="Simulador Orbital" position="-0.7 0.60 0.01" baseline="top" color="#F0E68C" width="1.4" wrap-count="22" font="mozillavr"></a-text>
-      <a-text id="text-coords" value="La Terra s'ha sincronitzat amb el dia i l'hora reals.\n\nActiva el temps per veure el pas de les estacions." position="-0.7 0.40 0.01" baseline="top" color="white" width="1.4" wrap-count="35" font="mozillavr"></a-text>
+      <a-text id="text-coords" value="La Terra s'ha sincronitzat amb el dia i l'hora reals.\n\nActiva la veu! Clica les línies." position="-0.7 0.40 0.01" baseline="top" color="white" width="1.4" wrap-count="35" font="mozillavr"></a-text>
       <a-image id="imatge-panell" src="" position="0 -0.2 0.02" width="1.2" height="0.6" visible="false"></a-image>
     </a-entity>
 
