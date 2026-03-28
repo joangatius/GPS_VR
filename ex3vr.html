@@ -2,40 +2,92 @@
 <html lang="ca">
 <head>
   <meta charset="utf-8">
-  <title>Repte 3 VR - Manipulació</title>
+  <title>Repte 3 VR - Maqueta Interactiva</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
-  <!-- PROGRAMACIÓ PER AGAFAR I MOURE EL PLANETA -->
   <script>
+    // 1. MOTOR DE FÍSIQUES PER AGAFAR I GIRAR LA TERRA (El que ja teníem)
     AFRAME.registerComponent('agafa-objectes', {
       init: function () {
         let comandament = this.el;
         let objecteAgafat = null;
 
-        // Quan es prem el gallet (trigger) de les PICO
         comandament.addEventListener('triggerdown', function () {
-          // Mirem què està tocant el raig làser en aquest moment
           let tocats = comandament.components.raycaster.intersectedEls;
-          
           if (tocats.length > 0 && tocats[0].classList.contains('interactiu')) {
             objecteAgafat = tocats[0];
-            
-            // Parem l'animació de girar sola perquè l'alumne en tingui el control
-            objecteAgafat.removeAttribute('animation');
-            
-            // "Enganxem" l'objecte al comandament matemàticament (Això permet moure'l i girar-lo amb la mà)
+            objecteAgafat.removeAttribute('animation'); // Aturem la rotació automàtica
             comandament.object3D.attach(objecteAgafat.object3D);
           }
         });
 
-        // Quan es deixa anar el gallet
         comandament.addEventListener('triggerup', function () {
           if (objecteAgafat) {
-            // Desenganxem l'objecte i el deixem flotant a l'espai de l'habitació
             comandament.sceneEl.object3D.attach(objecteAgafat.object3D);
             objecteAgafat = null;
           }
         });
+      }
+    });
+
+    // 2. EL CONSTRUCTOR DE CIUTATS I LÍNIES (LA MÀGIA MATEMÀTICA)
+    AFRAME.registerComponent('marcadors-terra', {
+      init: function () {
+        const planeta = this.el;
+        const R = 0.5; // El radi exacte de la nostra pilota (0.5 metres)
+
+        // DIBUIXEM L'EQUADOR (Anell groc)
+        const equador = document.createElement('a-torus');
+        equador.setAttribute('radius', R + 0.002); // Un pèl més gran que la bola perquè es vegi per fora
+        equador.setAttribute('radius-tubular', 0.002);
+        equador.setAttribute('color', 'yellow');
+        equador.setAttribute('rotation', '90 0 0'); // El tombem perquè talli pel mig
+        planeta.appendChild(equador);
+
+        // DIBUIXEM EL MERIDIÀ DE GREENWICH (Anell verd)
+        const meridian = document.createElement('a-torus');
+        meridian.setAttribute('radius', R + 0.002);
+        meridian.setAttribute('radius-tubular', 0.002);
+        meridian.setAttribute('color', 'lime');
+        meridian.setAttribute('rotation', '0 90 0'); // De dalt a baix
+        planeta.appendChild(meridian);
+
+        // FUNCIÓ PER CLAVAR XINXETES A LES COORDENADES EXACTES
+        this.afegirMarcador = function(nom, lat, lon, color) {
+          // Passem els graus a radians (Fórmula matemàtica)
+          let latRad = lat * Math.PI / 180;
+          let lonRad = lon * Math.PI / 180;
+          
+          // Calculem la posició 3D sobre l'esfera
+          // (Es multiplica pel radi perquè quedi enganxat a la superfície)
+          let x = -R * Math.cos(latRad) * Math.sin(lonRad);
+          let y =  R * Math.sin(latRad);
+          let z = -R * Math.cos(latRad) * Math.cos(lonRad);
+          
+          // Creem la boleta (xinxeta)
+          const punt = document.createElement('a-sphere');
+          punt.setAttribute('radius', 0.015); // Molt petitona, d'1.5 centímetres
+          punt.setAttribute('color', color);
+          punt.setAttribute('position', `${x} ${y} ${z}`);
+          
+          // Creem l'etiqueta flotant damunt la xinxeta
+          const text = document.createElement('a-text');
+          text.setAttribute('value', nom);
+          text.setAttribute('align', 'center');
+          text.setAttribute('color', 'white');
+          text.setAttribute('scale', '0.2 0.2 0.2');
+          text.setAttribute('position', '0 0.03 0'); // Flotant 3cm per sobre del punt
+          punt.appendChild(text);
+
+          // Enganxem la xinxeta al planeta (així quan giri el planeta, gira la ciutat)
+          planeta.appendChild(punt);
+        }
+
+        // ====== AQUÍ POSAREM TOTES LES CIUTATS DEL JOC ======
+        // Ara mateix en poso dues de prova
+        this.afegirMarcador("Lleida", 41.61, 0.61, "red");
+        this.afegirMarcador("Nova York", 40.71, -74.00, "blue");
+        this.afegirMarcador("Sydney", -33.86, 151.20, "orange");
       }
     });
   </script>
@@ -45,20 +97,20 @@
   <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
     
     <a-assets>
-      <!-- La imatge que vas pujar a GitHub -->
       <img id="mapa-terra" src="earth.jpg">
     </a-assets>
 
-    <!-- COMANDAMENTS AMB LA NOVA FUNCIÓ 'agafa-objectes' -->
+    <!-- COMANDAMENTS (Amb el raig làser) -->
     <a-entity laser-controls="hand: left" raycaster="objects: .interactiu; far: 5" agafa-objectes></a-entity>
     <a-entity laser-controls="hand: right" raycaster="objects: .interactiu; far: 5" agafa-objectes></a-entity>
 
-    <!-- EL PLANETA TERRA -->
-    <!-- Li he afegit id="planeta" i manté la classe interactiu -->
+    <!-- EL PLANETA -->
+    <!-- Ara inclou el nou component: "marcadors-terra" que executarà la matemàtica automàticament -->
     <a-sphere 
       id="planeta"
       class="interactiu"
       src="#mapa-terra" 
+      marcadors-terra
       radius="0.5" 
       position="0 1.2 -1.5" 
       material="roughness: 0.8;"
@@ -66,7 +118,7 @@
     </a-sphere>
 
     <a-text 
-      value="Apunta i prem el gallet per moure i girar la Terra!" 
+      value="Troba Lleida, Nova York i Sydney!" 
       position="0 1.9 -1.5" 
       align="center" 
       color="#000000"
