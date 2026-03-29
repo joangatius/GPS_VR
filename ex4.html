@@ -1,1 +1,210 @@
 
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <title>Repte 4 VR - Corbes de Nivell</title>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  
+  <script>
+    let cotaObjectiu = 2250; // La cota que l'alumne ha de buscar
+    let encerts = 0;
+    let veuDesbloquejada = false;
+    let audioCtx = null;
+
+    // Desbloqueig de veu
+    document.addEventListener('click', () => {
+      if (!veuDesbloquejada && 'speechSynthesis' in window) {
+        let msgSilenci = new SpeechSynthesisUtterance('');
+        msgSilenci.volume = 0; window.speechSynthesis.speak(msgSilenci);
+        veuDesbloquejada = true;
+      }
+    }, { once: true });
+
+    function ferBip(agut = false) {
+      if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      let osc = audioCtx.createOscillator();
+      let gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(agut ? 1200 : 600, audioCtx.currentTime); 
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime); 
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    function parlar(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); 
+        let missatge = new SpeechSynthesisUtterance(text);
+        let voices = window.speechSynthesis.getVoices();
+        let voice = voices.find(v => v.lang.startsWith('ca')) || voices.find(v => v.lang.startsWith('es')) || voices[0];
+        if (voice) missatge.voice = voice;
+        missatge.lang = voice ? voice.lang : 'ca-ES';
+        window.speechSynthesis.speak(missatge);
+      }
+    }
+
+    function nouObjectiu() {
+      // Generem una nova cota aleatòria entre 2050 i 2450 (múltiple de 50)
+      let nivellRandom = Math.floor(Math.random() * 9) + 1; // de l'1 al 9
+      cotaObjectiu = 2000 + (nivellRandom * 50);
+      document.getElementById('text-objectiu').setAttribute('value', `OBJECTIU:\nTroba la cota ${cotaObjectiu}m`);
+    }
+
+    // 1. MOTOR D'INTERACCIÓ
+    AFRAME.registerComponent('control-corbes', {
+      init: function () {
+        this.comandament = this.el;
+        this.maquetaPare = document.getElementById('maqueta-sencera');
+        this.maquetaAgafada = false;
+
+        this.comandament.addEventListener('triggerdown', (e) => {
+          let tocats = this.comandament.components.raycaster.intersectedEls;
+          
+          if (tocats.length > 0) {
+            let tocat = tocats[0];
+
+            // A) HEM TOCAT LA BASE (Per moure la maqueta)
+            if (tocat.classList.contains('safata-muntanya')) {
+              this.maquetaAgafada = true;
+              this.comandament.object3D.attach(this.maquetaPare.object3D);
+            } 
+            
+            // B) HEM TOCAT UNA CORBA DE NIVELL
+            else if (tocat.classList.contains('corba-nivell')) {
+              let cotaTocada = parseInt(tocat.getAttribute('data-cota'));
+              
+              // Animació visual de toc
+              let colorOriginal = tocat.getAttribute('color');
+              tocat.setAttribute('color', '#FFFFFF');
+              setTimeout(() => { tocat.setAttribute('color', colorOriginal); }, 300);
+
+              if (cotaTocada === cotaObjectiu) {
+                ferBip(true); // Bip agut (Encert!)
+                parlar(`Correcte! Aquesta és la cota ${cotaTocada} metres.`);
+                encerts++;
+                document.getElementById('text-marcador').setAttribute('value', `Punts: ${encerts}`);
+                document.getElementById('text-info').setAttribute('value', `Molt bé!\nHas entès l'equidistància.`);
+                nouObjectiu();
+              } else {
+                ferBip(false); // Bip greu (Error)
+                parlar(`Error. Has tocat la cota ${cotaTocada}.`);
+                document.getElementById('text-info').setAttribute('value', `Compte!\nAquesta és la cota ${cotaTocada}m.\n\nTorna a comptar des de la base (2000m).`);
+              }
+            }
+          }
+        });
+
+        this.comandament.addEventListener('triggerup', (e) => {
+          if (this.maquetaAgafada) {
+            this.comandament.sceneEl.object3D.attach(this.maquetaPare.object3D);
+            this.maquetaAgafada = false;
+          }
+        });
+      }
+    });
+
+    // 2. CONSTRUCTOR TOPOGRÀFIC (Genera la muntanya matemàticament)
+    AFRAME.registerComponent('generador-muntanya', {
+      init: function () {
+        let muntanya = this.el;
+        let cotaBase = 2000;
+        let equidistancia = 50;
+        let numNivells = 10;
+        
+        let radiBase = 0.6; // La muntanya fa 1.2m d'ample
+        let alçadaCapa = 0.05; // Cada llesca fa 5cm d'alt visualment
+
+        for(let i = 0; i < numNivells; i++) {
+          let cotaReal = cotaBase + (i * equidistancia);
+          
+          // Radi decreixent per donar-li forma de muntanya (Campana de Gauss suau)
+          let proporcio = i / (numNivells - 1);
+          let radi = radiBase * Math.exp(-2.5 * Math.pow(proporcio, 2));
+          
+          // Creem la "llesca" (Cilindre semitransparent)
+          let capa = document.createElement('a-cylinder');
+          capa.setAttribute('radius', radi);
+          capa.setAttribute('height', alçadaCapa);
+          // Posem el centre del cilindre al seu lloc
+          capa.setAttribute('position', `0 ${i * alçadaCapa + (alçadaCapa/2)} 0`); 
+          
+          // Estètica Hologràfica: Blau fosc semitransparent
+          capa.setAttribute('material', 'color: #00008B; transparent: true; opacity: 0.6; shader: flat;');
+          capa.classList.add('corba-nivell');
+          capa.setAttribute('data-cota', cotaReal);
+
+          // Creem l'anell visible (la línia de cota) a la vora superior de la llesca
+          let linia = document.createElement('a-torus');
+          linia.setAttribute('radius', radi);
+          linia.setAttribute('radius-tubular', 0.003);
+          linia.setAttribute('color', '#00FFFF'); // Cian brillant
+          linia.setAttribute('rotation', '90 0 0');
+          linia.setAttribute('position', `0 ${alçadaCapa/2} 0`); 
+          linia.setAttribute('material', 'shader: flat'); // Perquè brilli sempre
+          
+          // Si és la cota base, la pintem verda per donar una referència
+          if (i === 0) {
+            linia.setAttribute('color', '#32CD32');
+            linia.setAttribute('radius-tubular', 0.005);
+          }
+
+          capa.appendChild(linia);
+          muntanya.appendChild(capa);
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+
+  <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
+    
+    <a-entity laser-controls="hand: left" raycaster="objects: .safata-muntanya, .corba-nivell; far: 5" control-corbes></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="objects: .safata-muntanya, .corba-nivell; far: 5" control-corbes></a-entity>
+
+    <!-- LA MAQUETA (Es pot agafar tota junta) -->
+    <a-entity id="maqueta-sencera" position="0 0.8 -1.5">
+      
+      <!-- 1. LA SAFATA / BASE (Per on s'agafa) -->
+      <a-box 
+        class="safata-muntanya" 
+        width="1.4" height="0.05" depth="1.4" 
+        position="0 -0.025 0" 
+        material="shader: standard; color: #222; roughness: 0.9">
+      </a-box>
+      
+      <!-- Textos integrats a la safata -->
+      <a-text value="Cota Base (Línia Verda): 2.000 m" position="-0.65 0.05 0.65" rotation="-90 0 0" color="#32CD32" scale="0.4 0.4 0.4" font="mozillavr"></a-text>
+      <a-text value="Equidistància: 50 m" position="0.2 0.05 0.65" rotation="-90 0 0" color="#00FFFF" scale="0.4 0.4 0.4" font="mozillavr"></a-text>
+      <a-text value="Agafa la base fosca per moure la maqueta" position="-0.65 0.05 -0.65" rotation="-90 0 0" color="#FFF" scale="0.3 0.3 0.3" font="mozillavr"></a-text>
+
+      <!-- 2. LA MUNTANYA 3D (Es genera automàticament pel codi JS) -->
+      <a-entity generador-muntanya></a-entity>
+
+    </a-entity>
+
+    <!-- ============================================== -->
+    <!-- PANELL DEL JOC (Flotant a l'aire)              -->
+    <!-- ============================================== -->
+    <a-entity position="0 1.6 -2.5">
+      <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.9" width="1.8" height="0.8" border-radius="0.05"></a-plane>
+      
+      <a-text value="Laboratori de Topografia" position="-0.8 0.3 0.01" color="#F0E68C" width="1.6" wrap-count="25" font="mozillavr"></a-text>
+      
+      <!-- OBJECTIU -->
+      <a-text id="text-objectiu" value="OBJECTIU:\nTroba la cota 2250m" position="-0.8 0.05 0.01" color="#FFD700" width="1.6" wrap-count="20" font="mozillavr"></a-text>
+      
+      <!-- INFO ERROR/ENCERT -->
+      <a-text id="text-info" value="Apunta amb el làser a una de les línies cian i prem el gallet per descobrir a quina cota està." position="-0.1 -0.05 0.01" color="white" width="1.6" wrap-count="35" font="mozillavr"></a-text>
+      
+      <!-- MARCADOR -->
+      <a-text id="text-marcador" value="Punts: 0" position="0.5 0.3 0.01" color="#32CD32" width="1.6" wrap-count="25" font="mozillavr"></a-text>
+    </a-entity>
+
+  </a-scene>
+
+</body>
+</html>
