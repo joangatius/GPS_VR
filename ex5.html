@@ -2,32 +2,82 @@
 <html lang="ca">
 <head>
   <meta charset="utf-8">
-  <title>Visor Everest VR - Ajust d'Alçada</title>
+  <title>Visor Everest VR - Control Total</title>
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
-    // COMPONENT PER PUJAR I BAIXAR EL MODEL AMB EL JOYSTICK
-    AFRAME.registerComponent('control-alcada', {
-      schema: { target: { type: 'selector' } }, // Rep quin objecte ha de moure
+    // --- CONTROL COMANDAMENT ESQUERRE (Moure i Alçada) ---
+    AFRAME.registerComponent('joystick-esquerre', {
+      schema: { target: { type: 'selector' } },
       
       init: function () {
+        this.stickX = 0;
+        this.stickY = 0;
+        this.botoGripPremut = false; // El nostre "canvi de marxa"
+        
+        this.el.addEventListener('thumbstickmoved', (e) => {
+          this.stickX = e.detail.x; 
+          this.stickY = e.detail.y; 
+        });
+
+        // Detectem si premem el botó lateral (Grip)
+        this.el.addEventListener('gripdown', () => { this.botoGripPremut = true; });
+        this.el.addEventListener('gripup', () => { this.botoGripPremut = false; });
+      },
+      
+      tick: function () {
+        let obj = this.data.target.object3D;
+        
+        // Moure Esquerra / Dreta (Eix X)
+        if (Math.abs(this.stickX) > 0.1) {
+          obj.position.x += this.stickX * 0.05; 
+        }
+        
+        // Moure Endavant/Endarrere o Amunt/Avall depenent del botó Grip
+        if (Math.abs(this.stickY) > 0.1) {
+          if (this.botoGripPremut) {
+            // Si tenim el Grip premut, pugem i baixem (Eix Y)
+            obj.position.y -= this.stickY * 0.05;
+          } else {
+            // Si NO tenim el Grip premut, allunyem o apropem (Eix Z)
+            obj.position.z += this.stickY * 0.05;
+          }
+        }
+      }
+    });
+
+    // --- CONTROL COMANDAMENT DRET (Girar i Escalar) ---
+    AFRAME.registerComponent('joystick-dret', {
+      schema: { target: { type: 'selector' } },
+      
+      init: function () {
+        this.stickX = 0;
         this.stickY = 0;
         
-        // Detectem quan es mou la palanqueta (joystick) de les PICO
         this.el.addEventListener('thumbstickmoved', (e) => {
-          // L'eix Y va de -1 (amunt) a 1 (avall)
+          this.stickX = e.detail.x; 
           this.stickY = e.detail.y; 
         });
       },
       
       tick: function () {
-        // Executem el moviment 90 cops per segon per fer-ho súper suau
-        // Posem un marge de 0.1 perquè no es mogui sol si el joystick tremola una mica
+        let obj = this.data.target.object3D;
+        
+        // Girar sobre si mateix (Eix Y de rotació)
+        if (Math.abs(this.stickX) > 0.1) {
+          obj.rotation.y -= this.stickX * 0.05; 
+        }
+        
+        // Escalar (Fer més gran o més petit)
         if (Math.abs(this.stickY) > 0.1) {
-          let model3D = this.data.target.object3D;
+          // Si premem cap amunt (stickY negatiu), el multiplicador serà > 1 (creix)
+          // Si premem cap avall (stickY positiu), el multiplicador serà < 1 (es redueix)
+          let velocitatEscala = 1.0 - (this.stickY * 0.02); 
+          obj.scale.multiplyScalar(velocitatEscala);
           
-          // Movem l'objecte. Multipliquem per 0.05 per controlar la velocitat
-          model3D.position.y -= this.stickY * 0.05; 
+          // Límits de seguretat perquè no desaparegui ni es faci infinit
+          if (obj.scale.x < 0.00001) obj.scale.set(0.00001, 0.00001, 0.00001);
+          if (obj.scale.x > 5.0) obj.scale.set(5.0, 5.0, 5.0);
         }
       }
     });
@@ -38,29 +88,37 @@
   <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
     
     <a-assets>
-      <!-- El teu Everest de 4MB perfecte -->
       <a-asset-item id="model-everest" src="everest5.glb"></a-asset-item>
     </a-assets>
 
-    <a-light type="ambient" color="#FFF" intensity="0.6"></a-light>
-    <a-light type="directional" color="#FFF" intensity="0.8" position="2 4 3"></a-light>
+    <!-- LLUMS ARREGLADES (Més suaus i càlides) -->
+    <a-light type="ambient" color="#FFF" intensity="0.35"></a-light>
+    <!-- Llum direccional de color os/càlid (#FFF2E6) perquè la neu no enlluerni -->
+    <a-light type="directional" color="#FFF2E6" intensity="0.55" position="2 4 3"></a-light>
 
-    <!-- COMANDAMENTS AMB EL NOU CONTROL D'ALÇADA -->
-    <!-- Li diem que l'objectiu a moure és l'element amb id "maqueta-everest" -->
-    <a-entity laser-controls="hand: left" raycaster="far: 5" control-alcada="target: #maqueta-everest"></a-entity>
-    <a-entity laser-controls="hand: right" raycaster="far: 5" control-alcada="target: #maqueta-everest"></a-entity>
+    <!-- COMANDAMENTS AMB ELS NOUS SCRIPTS -->
+    <a-entity laser-controls="hand: left" raycaster="far: 5" joystick-esquerre="target: #maqueta-everest"></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="far: 5" joystick-dret="target: #maqueta-everest"></a-entity>
 
     <!-- EL MODEL 3D DE L'EVEREST -->
-    <!-- L'he posat d'inici a Y = -3.0 perquè ja surti més avall del normal -->
     <a-entity 
         id="maqueta-everest"
         gltf-model="#model-everest" 
-        position="0 -3.0 -2.0" 
+        position="0 -2.5 -2.0" 
         scale="0.001 0.001 0.001">
     </a-entity>
 
-    <!-- Panell d'instruccions flotant -->
-    <a-text value="Utilitza el JOYSTICK del teu comandament\nper pujar o baixar la muntanya." position="-1 1.5 -2" color="black" scale="0.5 0.5 0.5"></a-text>
+    <!-- PANELL D'INSTRUCCIONS D'ÚS -->
+    <a-entity position="-1.5 1.5 -2" rotation="0 25 0">
+      <a-plane color="#222" opacity="0.9" width="1.8" height="1.0" border-radius="0.05"></a-plane>
+      <a-text value="COMANDAMENTS VR" position="-0.8 0.4 0.01" color="#32CD32" font="mozillavr"></a-text>
+      
+      <a-text value="MÀ DRETA (Joystick):" position="-0.8 0.2 0.01" color="#FFD700" scale="0.8 0.8 0.8" font="mozillavr"></a-text>
+      <a-text value="- Amunt / Avall: Fer més gran o petit\n- Esquerra / Dreta: Girar la muntanya" position="-0.8 0.05 0.01" color="white" scale="0.7 0.7 0.7" font="mozillavr"></a-text>
+      
+      <a-text value="MÀ ESQUERRA (Joystick):" position="-0.8 -0.15 0.01" color="#1E90FF" scale="0.8 0.8 0.8" font="mozillavr"></a-text>
+      <a-text value="- Joystick: Moure endavant/endarrere/laterals\n- BOTÓ GRIP + Joystick: Pujar i baixar alçada" position="-0.8 -0.30 0.01" color="white" scale="0.7 0.7 0.7" font="mozillavr"></a-text>
+    </a-entity>
 
   </a-scene>
 
