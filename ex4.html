@@ -53,11 +53,11 @@
     function nouObjectiu() {
       let cotaAnterior = cotaObjectiu;
       while (cotaObjectiu === cotaAnterior) {
-        let nivellRandom = Math.floor(Math.random() * 15) + 1; // Genera de l'1 al 15
+        let nivellRandom = Math.floor(Math.random() * 15) + 1; // De l'1 al 15
         cotaObjectiu = 2000 + (nivellRandom * 50);
       }
       document.getElementById('text-objectiu').setAttribute('value', `OBJECTIU:\nTroba la cota ${cotaObjectiu}m`);
-      document.getElementById('text-info').setAttribute('value', "Apunta a una de les línies i dispara.");
+      document.getElementById('text-info').setAttribute('value', "Apunta a una de les línies blaves i dispara.");
       esperantNovaCota = false;
     }
 
@@ -67,7 +67,7 @@
         this.comandament = this.el;
 
         this.comandament.addEventListener('triggerdown', (e) => {
-          if (esperantNovaCota) return;
+          if (esperantNovaCota) return; // Bloqueig mentre celebrem encert
 
           let tocats = this.comandament.components.raycaster.intersectedEls;
           
@@ -79,15 +79,15 @@
               let meshLinia = tocat.meshLinia; 
               
               if (cotaTocada === cotaObjectiu) {
-                // ENCERT
+                // --- ENCERT ---
                 esperantNovaCota = true;
                 ferBip('encert');
-                parlar(`Perfecte! Aquesta és la cota ${cotaTocada}.`);
+                parlar(`Molt bé! Aquesta és la cota ${cotaTocada}.`);
                 encerts++;
                 document.getElementById('text-marcador').setAttribute('value', `Punts: ${encerts}`);
                 document.getElementById('text-info').setAttribute('value', `Molt bé! Has trobat els ${cotaTocada}m.\n\nPreparant següent cota...`);
                 
-                meshLinia.material.color.setHex(0x32CD32); 
+                meshLinia.material.color.setHex(0x32CD32); // Verd
                 
                 setTimeout(() => {
                   meshLinia.material.color.setHex(tocat.colorOriginal); 
@@ -95,12 +95,12 @@
                 }, 3000);
 
               } else {
-                // ERROR
+                // --- ERROR ---
                 ferBip('error');
-                parlar(`Error. Aquesta és la cota ${cotaTocada}.`);
-                document.getElementById('text-info').setAttribute('value', `ERROR! Aquesta és la cota ${cotaTocada}m.\n\nHas de trobar la de ${cotaObjectiu}m. Recorda que la base és a 2000m.`);
+                parlar(`Error. Has tocat la cota ${cotaTocada}.`);
+                document.getElementById('text-info').setAttribute('value', `ERROR!\nHas tocat la cota ${cotaTocada}m.\n\nHas de trobar la de ${cotaObjectiu}m.\n(Compta pujant de 50 en 50 des del verd)`);
                 
-                meshLinia.material.color.setHex(0xFF0000); 
+                meshLinia.material.color.setHex(0xFF0000); // Vermell
                 setTimeout(() => { meshLinia.material.color.setHex(tocat.colorOriginal); }, 1500);
               }
             }
@@ -109,76 +109,119 @@
       }
     });
 
-    // 2. GENERADOR TOPOGRÀFIC MATEMÀTIC IRREGULAR (Usant Three.js pur)
-    AFRAME.registerComponent('generador-muntanya', {
+    // 2. GENERADOR TOPOGRÀFIC MATEMÀTIC IRREGULAR (Terreny real i neu)
+    AFRAME.registerComponent('generador-muntanya-real', {
       init: function () {
         let muntanya = this.el;
         let cotaBase = 2000;
         let equidistancia = 50;
-        let numNivells = 16; // 16 capes * 0.125m = 2 metres d'alçada!
+        let numNivells = 16; 
         
-        let radiBase = 1.8; // Amplada de 3.6 metres!
-        let alçadaCapa = 0.125; 
+        let H = 2.4; // 2.4 metres d'alçada física
+        let R_base = 2.5; // 5 metres d'amplada física
+        let visualGap = H / (numNivells - 1); 
 
-        for(let i = 0; i < numNivells; i++) {
-          let proporcio = i / (numNivells - 1); 
-          let cotaReal = cotaBase + (i * equidistancia);
-          let radiNivell = radiBase * Math.exp(-2.5 * Math.pow(proporcio, 1.5));
+        // Funció matemàtica per donar forma al terreny
+        function getRadius(y, theta) {
+          let v = 1 - (y / H);
+          if (v < 0) v = 0;
+          // Corba tipus Bezier (campana suau)
+          let perfilVertical = R_base * (0.8 * Math.pow(v, 1.5) + 0.2 * v);
+          // Irregularitats de la roca i entrades de les valls
+          let soroll = 1 + 0.15 * Math.sin(3 * theta + y * 2) + 0.08 * Math.cos(5 * theta - y) + 0.12 * Math.sin(2 * theta);
+          return perfilVertical * soroll;
+        }
 
-          let segments = 64;
-          let shape = new THREE.Shape();
-          let puntsCorba =[];
+        // --- A) CREAR LA MALLA SÒLIDA (La pedra i la neu) ---
+        let radialSeg = 128;
+        let heightSeg = 64;
+        let geoMuntanya = new THREE.CylinderGeometry(0.01, R_base, H, radialSeg, heightSeg, false);
+        geoMuntanya.translate(0, H/2, 0); // Posem la base arran de terra
 
-          // Creem el perímetre irregular amb trigonometria
-          for (let j = 0; j < segments; j++) {
-            let angle = (j / segments) * Math.PI * 2;
-            // El 'soroll' crea la forma irregular de la muntanya (canvia a cada pis amb 'i')
-            let soroll = 1 + 0.12 * Math.sin(3 * angle + (i*0.2)) + 0.08 * Math.cos(5 * angle - (i*0.1));
-            let r = radiNivell * soroll;
-            
-            let x = Math.cos(angle) * r;
-            let z = Math.sin(angle) * r; 
-            
-            if (j === 0) shape.moveTo(x, z);
-            else shape.lineTo(x, z);
-            
-            // Punts 3D per a la línia de cota. (El pla Shape Y es convertirà en -Z per la rotació)
-            puntsCorba.push(new THREE.Vector3(x, 0, -z));
+        let posAttr = geoMuntanya.attributes.position;
+        let colors =[];
+        let colorObj = new THREE.Color();
+
+        for (let i = 0; i < posAttr.count; i++) {
+          let x = posAttr.getX(i);
+          let y = posAttr.getY(i);
+          let z = posAttr.getZ(i);
+
+          let theta = Math.atan2(z, x);
+          
+          if (y >= H - 0.01) {
+             posAttr.setXYZ(i, 0, H, 0);
+             colorObj.setRGB(1, 1, 1); 
+             colors.push(colorObj.r, colorObj.g, colorObj.b);
+             continue;
           }
-          puntsCorba.push(puntsCorba[0]); // Tanquem la línia
 
-          // LA CAPA FÍSICA (ExtrudeGeometry)
-          let extrudeSettings = { depth: alçadaCapa, bevelEnabled: false };
-          let geoCapa = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-          
-          let esNeu = (i >= 12); // Si estem molt amunt, posem neu!
-          let colorCapa = esNeu ? 0xFFFFFF : 0x00008B;
-          let opacitatCapa = esNeu ? 0.95 : 0.6;
-          
-          let matCapa = new THREE.MeshBasicMaterial({ color: colorCapa, transparent: true, opacity: opacitatCapa });
-          let meshCapa = new THREE.Mesh(geoCapa, matCapa);
-          meshCapa.rotation.x = -Math.PI / 2; // Tumbem el dibuix 2D per fer-lo 3D horitzontal
+          // Deformem el vèrtex
+          let r = getRadius(y, theta);
+          posAttr.setX(i, r * Math.cos(theta));
+          posAttr.setZ(i, r * Math.sin(theta));
 
-          // LA LÍNIA VISIBLE (Molt fina)
+          // NEU IRREGULAR (La neu baixa per unes bandes i puja per unes altres)
+          let neuBase = H * 0.55; 
+          let neuVariacio = 0.4 * Math.sin(4 * theta) + 0.3 * Math.cos(6 * theta - y);
+          let neuLimit = neuBase + neuVariacio;
+
+          if (y > neuLimit) {
+            // Neu
+            let blanc = 0.85 + 0.15 * Math.random();
+            colorObj.setRGB(blanc, blanc, blanc * 1.05); // Un pèl blavós
+          } else {
+            // Roca / Terra
+            let mix = Math.random() * 0.1;
+            if (y < H * 0.2) {
+                colorObj.setRGB(0.2 + mix, 0.4 + mix, 0.1); // Herba a la base
+            } else {
+                colorObj.setRGB(0.45 + mix, 0.30 + mix, 0.20 + mix); // Roca marró
+            }
+          }
+          colors.push(colorObj.r, colorObj.g, colorObj.b);
+        }
+
+        geoMuntanya.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geoMuntanya.computeVertexNormals();
+
+        // El flatShading dóna un toc poligonal de roca molt xulo
+        let matMuntanya = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1.0, flatShading: true });
+        let meshMuntanya = new THREE.Mesh(geoMuntanya, matMuntanya);
+        muntanya.setObject3D('mesh', meshMuntanya);
+
+        // --- B) CREAR LES CORBES DE NIVELL ---
+        for(let i = 0; i < numNivells; i++) {
+          let y_visual = i * visualGap;
+          let cotaReal = cotaBase + (i * equidistancia);
+
+          let segments = 128;
+          let puntsCorba =[];
+          for (let j = 0; j < segments; j++) {
+            let theta = (j / segments) * Math.PI * 2;
+            let r = getRadius(y_visual, theta);
+            r += 0.008; // La línia surt uns mil·límetres enfora de la pedra perquè es vegi clarament
+            puntsCorba.push(new THREE.Vector3(r * Math.cos(theta), y_visual, r * Math.sin(theta)));
+          }
+          puntsCorba.push(puntsCorba[0]); 
+
           let curve3D = new THREE.CatmullRomCurve3(puntsCorba);
-          let colorLinia = (i === 0) ? 0x32CD32 : (esNeu ? 0xDDDDDD : 0x00FFFF);
+          
+          let esNeu = y_visual > (H * 0.6); 
+          let colorLinia = (i === 0) ? 0x32CD32 : (esNeu ? 0x00BFFF : 0x00FFFF);
+
+          // La línia visual (primmíssima)
           let geoLinia = new THREE.TubeGeometry(curve3D, segments, 0.003, 8, true);
           let matLinia = new THREE.MeshBasicMaterial({ color: colorLinia });
           let meshLinia = new THREE.Mesh(geoLinia, matLinia);
-          meshLinia.position.y = alçadaCapa; // Puja la línia a dalt de la llesca
 
-          // EL HITBOX INVISIBLE (Molt més gruixut per clicar bé i que no foradi l'holograma)
-          let geoHitbox = new THREE.TubeGeometry(curve3D, segments, 0.03, 8, true);
+          // L'escut de protecció invisible (perquè el làser no falli)
+          let geoHitbox = new THREE.TubeGeometry(curve3D, segments, 0.035, 8, true);
           let matHitbox = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.0, depthWrite: false });
           let meshHitbox = new THREE.Mesh(geoHitbox, matHitbox);
-          meshHitbox.position.y = alçadaCapa;
 
-          // AGRUPEM TOT EN UNA ENTITAT A-FRAME
           let entitatNivell = document.createElement('a-entity');
-          entitatNivell.setAttribute('position', `0 ${i * alçadaCapa} 0`);
-          
           let obj3D = new THREE.Group();
-          obj3D.add(meshCapa);
           obj3D.add(meshLinia);
           obj3D.add(meshHitbox);
           entitatNivell.setObject3D('mesh', obj3D);
@@ -198,31 +241,29 @@
 
   <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
     
+    <!-- Llums per donar volum i ombres a la muntanya -->
+    <a-light type="ambient" color="#FFF" intensity="0.5"></a-light>
+    <a-light type="directional" color="#FFF" intensity="0.8" position="2 4 3"></a-light>
+
     <a-entity laser-controls="hand: left" raycaster="objects: .corba-nivell; far: 5" control-corbes></a-entity>
     <a-entity laser-controls="hand: right" raycaster="objects: .corba-nivell; far: 5" control-corbes></a-entity>
 
-    <!-- LA MUNTANYA GEGANT (Centrada a 2 metres endavant) -->
-    <!-- Ja no s'agafa. És fixa perquè fa 2 metres d'alt! -->
-    <a-entity position="0 0 -2.0" generador-muntanya></a-entity>
+    <!-- LA MUNTANYA GEGANT (Centrada a terra, separada de tu 2.5 metres) -->
+    <a-entity position="0 0 -2.5" generador-muntanya-real></a-entity>
 
     <!-- ============================================== -->
-    <!-- PANELL DEL JOC (Molt alt per no tapar el cim)  -->
+    <!-- PANELL DEL JOC (Flotant Alt perquè no el tapi el cim) -->
     <!-- ============================================== -->
-    <a-entity position="0 2.6 -3.0" rotation="10 0 0">
+    <a-entity position="0 2.8 -3.5" rotation="15 0 0">
       
-      <!-- Cartell negre opac gegant -->
       <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.95" width="2.4" height="1.0" border-radius="0.05"></a-plane>
       
-      <!-- Títol Tècnic -->
-      <a-text value="Laboratori de Topografia i Corbes de Nivell" position="-1.1 0.4 0.01" color="#32CD32" width="2.2" wrap-count="35" baseline="top" font="mozillavr"></a-text>
+      <a-text value="Laboratori de Topografia" position="-1.1 0.4 0.01" color="#32CD32" width="2.2" wrap-count="35" baseline="top" font="mozillavr"></a-text>
       
-      <!-- OBJECTIU -->
       <a-text id="text-objectiu" value="OBJECTIU:\nTroba la cota 2350m" position="-1.1 0.1 0.01" color="#FFD700" width="1.6" wrap-count="20" baseline="top" font="mozillavr"></a-text>
       
-      <!-- INFO I ERRORS -->
-      <a-text id="text-info" value="Observa la muntanya.\nLa línia verda del terra són 2000m d'alçada.\nL'equidistància (salt entre línies) és de 50m." position="-1.1 -0.2 0.01" color="white" width="2.2" wrap-count="45" baseline="top" font="mozillavr"></a-text>
+      <a-text id="text-info" value="Observa la forma de la muntanya.\nLa línia verda de sota de tot són 2000m d'alçada.\nL'equidistància (el salt d'alçada entre línies) és de 50m." position="-1.1 -0.2 0.01" color="white" width="2.2" wrap-count="45" baseline="top" font="mozillavr"></a-text>
       
-      <!-- MARCADOR DE PUNTS -->
       <a-text id="text-marcador" value="Punts: 0" position="0.5 0.1 0.01" color="#00FFFF" width="1.4" wrap-count="15" baseline="top" align="right" font="mozillavr"></a-text>
       
     </a-entity>
