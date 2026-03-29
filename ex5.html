@@ -6,26 +6,27 @@
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   
   <script>
-    // --- CONTROL COMANDAMENT ESQUERRE (Moure i Alçada) ---
-    AFRAME.registerComponent('joystick-esquerre', {
+    // --- CONTROL COMANDAMENT ESQUERRE (Moure Pla XZ + Fer Petit) ---
+    AFRAME.registerComponent('control-esquerre', {
       schema: { target: { type: 'selector' } },
       
       init: function () {
         this.stickX = 0;
         this.stickY = 0;
-        this.botoGripPremut = false; // El nostre "canvi de marxa"
+        this.isScalingDown = false;
         
         this.el.addEventListener('thumbstickmoved', (e) => {
           this.stickX = e.detail.x; 
           this.stickY = e.detail.y; 
         });
 
-        // Detectem si premem el botó lateral (Grip)
-        this.el.addEventListener('gripdown', () => { this.botoGripPremut = true; });
-        this.el.addEventListener('gripup', () => { this.botoGripPremut = false; });
+        // Detectem el Gallet (Trigger) per fer petit
+        this.el.addEventListener('triggerdown', () => { this.isScalingDown = true; });
+        this.el.addEventListener('triggerup', () => { this.isScalingDown = false; });
       },
       
       tick: function () {
+        if (!this.data.target) return;
         let obj = this.data.target.object3D;
         
         // Moure Esquerra / Dreta (Eix X)
@@ -33,34 +34,41 @@
           obj.position.x += this.stickX * 0.05; 
         }
         
-        // Moure Endavant/Endarrere o Amunt/Avall depenent del botó Grip
+        // Apropar / Allunyar (Eix Z)
         if (Math.abs(this.stickY) > 0.1) {
-          if (this.botoGripPremut) {
-            // Si tenim el Grip premut, pugem i baixem (Eix Y)
-            obj.position.y -= this.stickY * 0.05;
-          } else {
-            // Si NO tenim el Grip premut, allunyem o apropem (Eix Z)
-            obj.position.z += this.stickY * 0.05;
-          }
+          obj.position.z += this.stickY * 0.05;
+        }
+
+        // REDUÏR ESCALA (Gallet Esquerre)
+        if (this.isScalingDown) {
+          obj.scale.multiplyScalar(0.98); // Es redueix un 2% per cada fotograma
+          // Límit perquè no desaparegui
+          if (obj.scale.x < 0.00001) obj.scale.set(0.00001, 0.00001, 0.00001);
         }
       }
     });
 
-    // --- CONTROL COMANDAMENT DRET (Girar i Escalar) ---
-    AFRAME.registerComponent('joystick-dret', {
+    // --- CONTROL COMANDAMENT DRET (Ascensor, Girar + Fer Gran) ---
+    AFRAME.registerComponent('control-dret', {
       schema: { target: { type: 'selector' } },
       
       init: function () {
         this.stickX = 0;
         this.stickY = 0;
+        this.isScalingUp = false;
         
         this.el.addEventListener('thumbstickmoved', (e) => {
           this.stickX = e.detail.x; 
           this.stickY = e.detail.y; 
         });
+
+        // Detectem el Gallet (Trigger) per fer gran
+        this.el.addEventListener('triggerdown', () => { this.isScalingUp = true; });
+        this.el.addEventListener('triggerup', () => { this.isScalingUp = false; });
       },
       
       tick: function () {
+        if (!this.data.target) return;
         let obj = this.data.target.object3D;
         
         // Girar sobre si mateix (Eix Y de rotació)
@@ -68,16 +76,16 @@
           obj.rotation.y -= this.stickX * 0.05; 
         }
         
-        // Escalar (Fer més gran o més petit)
+        // Ascensor (Pujar i Baixar a l'Eix Y vertical)
         if (Math.abs(this.stickY) > 0.1) {
-          // Si premem cap amunt (stickY negatiu), el multiplicador serà > 1 (creix)
-          // Si premem cap avall (stickY positiu), el multiplicador serà < 1 (es redueix)
-          let velocitatEscala = 1.0 - (this.stickY * 0.02); 
-          obj.scale.multiplyScalar(velocitatEscala);
-          
-          // Límits de seguretat perquè no desaparegui ni es faci infinit
-          if (obj.scale.x < 0.00001) obj.scale.set(0.00001, 0.00001, 0.00001);
-          if (obj.scale.x > 5.0) obj.scale.set(5.0, 5.0, 5.0);
+          obj.position.y -= this.stickY * 0.05;
+        }
+
+        // AUGMENTAR ESCALA (Gallet Dret)
+        if (this.isScalingUp) {
+          obj.scale.multiplyScalar(1.02); // Creix un 2% per fotograma
+          // Límit perquè no ompli l'univers sencer
+          if (obj.scale.x > 10.0) obj.scale.set(10.0, 10.0, 10.0);
         }
       }
     });
@@ -91,14 +99,13 @@
       <a-asset-item id="model-everest" src="everest5.glb"></a-asset-item>
     </a-assets>
 
-    <!-- LLUMS ARREGLADES (Més suaus i càlides) -->
+    <!-- LLUMS (Suaus i realistes per veure la neu sense cremar els colors) -->
     <a-light type="ambient" color="#FFF" intensity="0.35"></a-light>
-    <!-- Llum direccional de color os/càlid (#FFF2E6) perquè la neu no enlluerni -->
     <a-light type="directional" color="#FFF2E6" intensity="0.55" position="2 4 3"></a-light>
 
-    <!-- COMANDAMENTS AMB ELS NOUS SCRIPTS -->
-    <a-entity laser-controls="hand: left" raycaster="far: 5" joystick-esquerre="target: #maqueta-everest"></a-entity>
-    <a-entity laser-controls="hand: right" raycaster="far: 5" joystick-dret="target: #maqueta-everest"></a-entity>
+    <!-- COMANDAMENTS ENLLAÇATS ALS NOUS SCRIPTS -->
+    <a-entity laser-controls="hand: left" raycaster="far: 5" control-esquerre="target: #maqueta-everest"></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="far: 5" control-dret="target: #maqueta-everest"></a-entity>
 
     <!-- EL MODEL 3D DE L'EVEREST -->
     <a-entity 
@@ -108,16 +115,20 @@
         scale="0.001 0.001 0.001">
     </a-entity>
 
-    <!-- PANELL D'INSTRUCCIONS D'ÚS -->
+    <!-- PANELL D'INSTRUCCIONS (Arreglat amb wrap-count i baseline) -->
     <a-entity position="-1.5 1.5 -2" rotation="0 25 0">
-      <a-plane color="#222" opacity="0.9" width="1.8" height="1.0" border-radius="0.05"></a-plane>
-      <a-text value="COMANDAMENTS VR" position="-0.8 0.4 0.01" color="#32CD32" font="mozillavr"></a-text>
       
-      <a-text value="MÀ DRETA (Joystick):" position="-0.8 0.2 0.01" color="#FFD700" scale="0.8 0.8 0.8" font="mozillavr"></a-text>
-      <a-text value="- Amunt / Avall: Fer més gran o petit\n- Esquerra / Dreta: Girar la muntanya" position="-0.8 0.05 0.01" color="white" scale="0.7 0.7 0.7" font="mozillavr"></a-text>
+      <!-- Fons pla autoluminós -->
+      <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.9" width="2.4" height="1.4" border-radius="0.05"></a-plane>
       
-      <a-text value="MÀ ESQUERRA (Joystick):" position="-0.8 -0.15 0.01" color="#1E90FF" scale="0.8 0.8 0.8" font="mozillavr"></a-text>
-      <a-text value="- Joystick: Moure endavant/endarrere/laterals\n- BOTÓ GRIP + Joystick: Pujar i baixar alçada" position="-0.8 -0.30 0.01" color="white" scale="0.7 0.7 0.7" font="mozillavr"></a-text>
+      <a-text value="COMANDAMENTS VR" position="-1.0 0.55 0.01" color="#32CD32" width="2" wrap-count="20" baseline="top" font="mozillavr"></a-text>
+      
+      <a-text value="MÀ DRETA:" position="-1.0 0.30 0.01" color="#FFD700" width="2" wrap-count="25" baseline="top" font="mozillavr"></a-text>
+      <a-text value="- Joystick Amunt / Avall: Pujar i Baixar la muntanya\n- Joystick Esq / Dreta: Girar la muntanya\n- Gallet (Trigger): Fer MÉS GRAN (Escalar)" position="-1.0 0.15 0.01" color="white" width="2.0" wrap-count="45" baseline="top" font="mozillavr"></a-text>
+      
+      <a-text value="MÀ ESQUERRA:" position="-1.0 -0.15 0.01" color="#1E90FF" width="2" wrap-count="25" baseline="top" font="mozillavr"></a-text>
+      <a-text value="- Joystick Amunt / Avall: Apropar o allunyar\n- Joystick Esq / Dreta: Moure lateralment\n- Gallet (Trigger): Fer MÉS PETIT (Escalar)" position="-1.0 -0.30 0.01" color="white" width="2.0" wrap-count="45" baseline="top" font="mozillavr"></a-text>
+
     </a-entity>
 
   </a-scene>
