@@ -1,1 +1,37 @@
 
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <title>Visor Everest VR</title>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+</head>
+<body>
+
+  <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
+    
+    <!-- Magatzem: Carreguem el teu model convertit -->
+    <a-assets>
+      <a-asset-item id="model-everest" src="everest.glb"></a-asset-item>
+    </a-assets>
+
+    <a-entity laser-controls="hand: left" raycaster="far: 5"></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="far: 5"></a-entity>
+
+    <a-light type="ambient" color="#FFF" intensity="0.6"></a-light>
+    <a-light type="directional" color="#FFF" intensity="0.8" position="2 4 3"></a-light>
+
+    <!-- LA TEVA MAQUETA -->
+    <!-- scale="0.001 0.001 0.001" per fer-la petita d'inici -->
+    <a-entity 
+        gltf-model="#model-everest" 
+        position="0 1.0 -2.0" 
+        scale="0.001 0.001 0.001">
+    </a-entity>
+
+    <a-text value="Carregant Everest...\nSi triga molt, és pel pes de l'arxiu." position="-1 2 -2" color="black" scale="0.5 0.5 0.5"></a-text>
+
+  </a-scene>
+
+</body>
+</html>
