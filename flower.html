@@ -1,1 +1,138 @@
 
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <title>Visor Everest VR - Control Total</title>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  
+  <script>
+    // --- CONTROL COMANDAMENT ESQUERRE (Moure Pla XZ + Fer Petit) ---
+    AFRAME.registerComponent('control-esquerre', {
+      schema: { target: { type: 'selector' } },
+      
+      init: function () {
+        this.stickX = 0;
+        this.stickY = 0;
+        this.isScalingDown = false;
+        
+        this.el.addEventListener('thumbstickmoved', (e) => {
+          this.stickX = e.detail.x; 
+          this.stickY = e.detail.y; 
+        });
+
+        // Detectem el Gallet (Trigger) per fer petit
+        this.el.addEventListener('triggerdown', () => { this.isScalingDown = true; });
+        this.el.addEventListener('triggerup', () => { this.isScalingDown = false; });
+      },
+      
+      tick: function () {
+        if (!this.data.target) return;
+        let obj = this.data.target.object3D;
+        
+        // Moure Esquerra / Dreta (Eix X)
+        if (Math.abs(this.stickX) > 0.1) {
+          obj.position.x += this.stickX * 0.05; 
+        }
+        
+        // Apropar / Allunyar (Eix Z)
+        if (Math.abs(this.stickY) > 0.1) {
+          obj.position.z += this.stickY * 0.05;
+        }
+
+        // REDUÏR ESCALA (Gallet Esquerre)
+        if (this.isScalingDown) {
+          obj.scale.multiplyScalar(0.98); // Es redueix un 2% per cada fotograma
+          // Límit perquè no desaparegui
+          if (obj.scale.x < 0.00001) obj.scale.set(0.00001, 0.00001, 0.00001);
+        }
+      }
+    });
+
+    // --- CONTROL COMANDAMENT DRET (Ascensor, Girar + Fer Gran) ---
+    AFRAME.registerComponent('control-dret', {
+      schema: { target: { type: 'selector' } },
+      
+      init: function () {
+        this.stickX = 0;
+        this.stickY = 0;
+        this.isScalingUp = false;
+        
+        this.el.addEventListener('thumbstickmoved', (e) => {
+          this.stickX = e.detail.x; 
+          this.stickY = e.detail.y; 
+        });
+
+        // Detectem el Gallet (Trigger) per fer gran
+        this.el.addEventListener('triggerdown', () => { this.isScalingUp = true; });
+        this.el.addEventListener('triggerup', () => { this.isScalingUp = false; });
+      },
+      
+      tick: function () {
+        if (!this.data.target) return;
+        let obj = this.data.target.object3D;
+        
+        // Girar sobre si mateix (Eix Y de rotació)
+        if (Math.abs(this.stickX) > 0.1) {
+          obj.rotation.y -= this.stickX * 0.05; 
+        }
+        
+        // Ascensor (Pujar i Baixar a l'Eix Y vertical)
+        if (Math.abs(this.stickY) > 0.1) {
+          obj.position.y -= this.stickY * 0.05;
+        }
+
+        // AUGMENTAR ESCALA (Gallet Dret)
+        if (this.isScalingUp) {
+          obj.scale.multiplyScalar(1.02); // Creix un 2% per fotograma
+          // Límit perquè no ompli l'univers sencer
+          if (obj.scale.x > 10.0) obj.scale.set(10.0, 10.0, 10.0);
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+
+  <a-scene webxr="optionalFeatures: local-floor;" background="transparent: true">
+    
+    <a-assets>
+      <a-asset-item id="model-everest" src="flower.glb"></a-asset-item>
+    </a-assets>
+
+    <!-- LLUMS (Suaus i realistes per veure la neu sense cremar els colors) -->
+    <a-light type="ambient" color="#FFF" intensity="0.35"></a-light>
+    <a-light type="directional" color="#FFF2E6" intensity="0.55" position="2 4 3"></a-light>
+
+    <!-- COMANDAMENTS ENLLAÇATS ALS NOUS SCRIPTS -->
+    <a-entity laser-controls="hand: left" raycaster="far: 5" control-esquerre="target: #maqueta-everest"></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="far: 5" control-dret="target: #maqueta-everest"></a-entity>
+
+    <!-- EL MODEL 3D DE L'EVEREST -->
+    <a-entity 
+        id="maqueta-everest"
+        gltf-model="#model-everest" 
+        position="0 -2.5 -2.0" 
+        scale="0.001 0.001 0.001">
+    </a-entity>
+
+    <!-- PANELL D'INSTRUCCIONS (Arreglat amb wrap-count i baseline) -->
+    <a-entity position="-1.5 1.5 -2" rotation="0 25 0">
+      
+      <!-- Fons pla autoluminós -->
+      <a-plane material="shader: flat; color: #111; transparent: true; opacity: 0.9" width="2.4" height="1.4" border-radius="0.05"></a-plane>
+      
+      <a-text value="COMANDAMENTS VR" position="-1.0 0.55 0.01" color="#32CD32" width="2" wrap-count="20" baseline="top" font="mozillavr"></a-text>
+      
+      <a-text value="MÀ DRETA:" position="-1.0 0.30 0.01" color="#FFD700" width="2" wrap-count="25" baseline="top" font="mozillavr"></a-text>
+      <a-text value="- Joystick Amunt / Avall: Pujar i Baixar la muntanya\n- Joystick Esq / Dreta: Girar la muntanya\n- Gallet (Trigger): Fer MÉS GRAN (Escalar)" position="-1.0 0.15 0.01" color="white" width="2.0" wrap-count="45" baseline="top" font="mozillavr"></a-text>
+      
+      <a-text value="MÀ ESQUERRA:" position="-1.0 -0.15 0.01" color="#1E90FF" width="2" wrap-count="25" baseline="top" font="mozillavr"></a-text>
+      <a-text value="- Joystick Amunt / Avall: Apropar o allunyar\n- Joystick Esq / Dreta: Moure lateralment\n- Gallet (Trigger): Fer MÉS PETIT (Escalar)" position="-1.0 -0.30 0.01" color="white" width="2.0" wrap-count="45" baseline="top" font="mozillavr"></a-text>
+
+    </a-entity>
+
+  </a-scene>
+
+</body>
+</html>
